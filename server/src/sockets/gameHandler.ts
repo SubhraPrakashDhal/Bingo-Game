@@ -182,9 +182,39 @@ export function registerGameHandlers(
   // 8. Request Rematch
   socket.on('game:rematch', () => {
     const playerId = getPlayerId();
+
     const result = roomManager.requestRematch(playerId);
-    if (result.room) {
+
+    if (!result.room) return;
+
+    // Both players accepted rematch
+    if (result.bothReadyForRematch) {
       broadcastRoomUpdate(result.room.roomId);
+      return;
+    }
+
+    // Only this player requested rematch
+    const requestingPlayer = result.room.players.find(
+      (p) => p.playerId === playerId
+    );
+
+    const opponent = result.room.players.find(
+      (p) => p.playerId !== playerId
+    );
+
+    if (!requestingPlayer || !opponent) {
+      broadcastRoomUpdate(result.room.roomId);
+      return;
+    }
+
+    // First update opponent's room state
+    broadcastRoomUpdate(result.room.roomId);
+
+    // Send direct notification to opponent
+    if (opponent.id && opponent.isConnected !== false) {
+      io.to(opponent.id).emit('rematch:requested', {
+        nickname: requestingPlayer.nickname,
+      });
     }
   });
 

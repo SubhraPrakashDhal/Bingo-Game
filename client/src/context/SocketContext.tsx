@@ -74,6 +74,7 @@ interface SocketContextType {
   calledNotification: { number: number; calledByNickname: string; calledById: string } | null;
   tossNotification: { choice: CoinChoice; outcome: CoinChoice; winnerId: string; winnerNickname: string } | null;
   playerLeftNotification: { nickname: string } | null;
+  rematchNotification: { nickname: string } | null;
   createRoom: (nickname: string) => Promise<{ success: boolean; roomId?: string; error?: string }>;
   joinRoom: (roomId: string, nickname: string) => Promise<{ success: boolean; error?: string }>;
   toggleReady: () => void;
@@ -106,6 +107,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playerLeftNotification, setPlayerLeftNotification] = useState<{ nickname: string } | null>(null);
+  const [rematchNotification, setRematchNotification] = useState<{ nickname: string } | null>(null);
   const [calledNotification, setCalledNotification] = useState<{
     number: number;
     calledByNickname: string;
@@ -168,6 +170,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     newSocket.on('room:updated', (state: ClientRoomState) => {
       console.log('Room state updated:', state);
       setRoomState(state);
+      if (state.stage !== 'GAME_OVER') {
+        setRematchNotification(null);
+      }
       setIsReconnecting(false);
       setIsRestoringSession(false);
       // Persist active roomId to localStorage session
@@ -189,6 +194,11 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setTimeout(() => {
         setTossNotification(null);
       }, 4000);
+    });
+
+    newSocket.on('rematch:requested', ({ nickname }) => {
+      console.log('Rematch requested event:', nickname);
+      setRematchNotification({ nickname });
     });
 
     newSocket.on('player:disconnected', ({ nickname }) => {
@@ -254,12 +264,14 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const requestRematch = () => {
     if (socket) socket.emit('game:rematch');
+    setRematchNotification(null);
   };
 
   const leaveRoom = () => {
     if (socket) socket.emit('room:leave');
     clearSessionRoom();
     setRoomState(null);
+    setRematchNotification(null);
     setIsRestoringSession(false);
   };
 
@@ -271,6 +283,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.error('Failed to clear bingo_session', err);
     }
     setRoomState(null);
+    setRematchNotification(null);
     setIsRestoringSession(false);
   };
 
@@ -290,6 +303,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         calledNotification,
         tossNotification,
         playerLeftNotification,
+        rematchNotification,
         createRoom,
         joinRoom,
         toggleReady,

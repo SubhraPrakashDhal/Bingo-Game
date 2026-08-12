@@ -340,7 +340,7 @@ export class RoomManager {
     );
 
     // Recalculate line completion for both players
-    let winningPlayer: Player | undefined = undefined;
+    const winningPlayers: Player[] = [];
 
     if (!room.completedLineCounts) room.completedLineCounts = {};
     if (!room.winningLines) room.winningLines = {};
@@ -354,9 +354,26 @@ export class RoomManager {
         room.completedLineCounts[pId] = evalResult.completedLinesCount;
         room.winningLines[pId] = evalResult.completedLines;
 
-        if (evalResult.hasWon && !winningPlayer) {
-          winningPlayer = p;
+        if (evalResult.hasWon) {
+          winningPlayers.push(p);
         }
+      }
+    }
+
+    let winningPlayer: Player | undefined = undefined;
+
+    if (winningPlayers.length > 0) {
+      const callerId = caller ? (caller.playerId || caller.id) : playerId;
+      const callerWon = winningPlayers.some(
+        (p) => (p.playerId || p.id) === callerId
+      );
+
+      if (callerWon) {
+        // If caller achieved Bingo (including simultaneous Bingo with opponent), caller gets explicit priority
+        winningPlayer = caller || winningPlayers[0];
+      } else {
+        // Only opponent achieved Bingo from this call
+        winningPlayer = winningPlayers[0];
       }
     }
 

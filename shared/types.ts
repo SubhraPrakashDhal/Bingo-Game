@@ -85,6 +85,7 @@ export interface ServerToClientEvents {
   'number:called': (payload: { number: number; calledByNickname: string; calledById: string }) => void;
   'toss:result': (payload: { choice: CoinChoice; outcome: CoinChoice; winnerId: string; winnerNickname: string }) => void;
   'game:bingo': (payload: { winnerId: string; winnerNickname: string }) => void;
+  'rematch:requested': (payload: { nickname: string }) => void;
   'error:message': (payload: { message: string }) => void;
   'player:disconnected': (payload: { nickname: string }) => void;
   'player:reconnected': (payload: { nickname: string }) => void;

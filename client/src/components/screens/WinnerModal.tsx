@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 export const WinnerModal: React.FC = () => {
-  const { roomState, requestRematch, leaveRoom } = useBingoSocket();
+  const { roomState, requestRematch, leaveRoom, rematchNotification } = useBingoSocket();
 
   if (!roomState || roomState.stage !== 'GAME_OVER') return null;
 
@@ -24,6 +24,16 @@ export const WinnerModal: React.FC = () => {
   const me = roomState.players.find(
     (p) => p.id === roomState.myPlayerId || p.id === roomState.mySocketId
   );
+
+  const opponent = roomState.players.find(
+    (p) => p.id !== me?.id
+  );
+
+  const requestingNickname =
+    rematchNotification?.nickname ||
+    (opponent?.wantsRematch ? opponent.nickname : null);
+
+  const showRematchNotification = !!requestingNickname && !me?.wantsRematch;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-fade-in">
@@ -102,7 +112,19 @@ export const WinnerModal: React.FC = () => {
             LINES COMPLETED
           </div>
 
-          {/* Rematch Status */}
+          {/* Rematch Requested Notification for Opponent */}
+          {showRematchNotification && (
+            <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-blue-600/30 to-indigo-600/30 border border-blue-400/40 text-blue-200 text-center shadow-lg animate-fade-in">
+              <div className="text-sm font-extrabold flex items-center justify-center gap-1.5 mb-1 text-blue-300">
+                <span>🔄 Rematch Requested</span>
+              </div>
+              <div className="text-xs font-semibold text-white">
+                {requestingNickname} wants to play again!
+              </div>
+            </div>
+          )}
+
+          {/* Rematch Status (Waiting for opponent) */}
           {me?.wantsRematch && (
             <div className="mb-6 p-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs flex items-center justify-center gap-2">
               <Clock className="w-4 h-4 text-blue-400 animate-spin" />
