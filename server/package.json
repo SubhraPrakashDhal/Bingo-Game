@@ -9,7 +9,6 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
   },
   "dependencies": {
-    "bingo-game-root": "file:..",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
