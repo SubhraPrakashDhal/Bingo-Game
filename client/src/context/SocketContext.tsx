@@ -67,6 +67,7 @@ interface SocketContextType {
   socket: Socket<ServerToClientEvents, ClientToServerEvents> | null;
   isConnected: boolean;
   isReconnecting: boolean;
+  isRestoringSession: boolean;
   playerId: string;
   roomState: ClientRoomState | null;
   errorMessage: string | null;
@@ -92,6 +93,16 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [socket, setSocket] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isRestoringSession, setIsRestoringSession] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) {
+        const session: BingoSession = JSON.parse(raw);
+        return !!session.roomId;
+      }
+    } catch (e) {}
+    return false;
+  });
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playerLeftNotification, setPlayerLeftNotification] = useState<{ nickname: string } | null>(null);
@@ -108,7 +119,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   } | null>(null);
 
   useEffect(() => {
-    const serverUrl = `${window.location.protocol}//${window.location.hostname}:3001`;
+    const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     const newSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io(serverUrl, {
       auth: { playerId },
       autoConnect: true,
@@ -130,15 +141,21 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (raw) {
           const session: BingoSession = JSON.parse(raw);
           if (session.roomId) {
-            newSocket.emit('room:reconnect', (res) => {
+            newSocket.emit('room:reconnect', { playerId }, (res) => {
               if (!res.success) {
                 clearSessionRoom();
+                setIsRestoringSession(false);
               }
             });
+          } else {
+            setIsRestoringSession(false);
           }
+        } else {
+          setIsRestoringSession(false);
         }
       } catch (err) {
         console.error('Error checking room reconnection', err);
+        setIsRestoringSession(false);
       }
     });
 
@@ -152,6 +169,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('Room state updated:', state);
       setRoomState(state);
       setIsReconnecting(false);
+      setIsRestoringSession(false);
       // Persist active roomId to localStorage session
       if (state.roomId) {
         const myPlayer = state.players.find((p) => p.id === playerId);
@@ -242,6 +260,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (socket) socket.emit('room:leave');
     clearSessionRoom();
     setRoomState(null);
+    setIsRestoringSession(false);
   };
 
   const endSession = () => {
@@ -252,6 +271,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.error('Failed to clear bingo_session', err);
     }
     setRoomState(null);
+    setIsRestoringSession(false);
   };
 
   const clearErrorMessage = () => setErrorMessage(null);
@@ -263,6 +283,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         socket,
         isConnected,
         isReconnecting,
+        isRestoringSession,
         playerId,
         roomState,
         errorMessage,

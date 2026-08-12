@@ -24,10 +24,11 @@ export function registerGameHandlers(
     if (!room) return;
 
     for (const player of room.players) {
-      if (player.socketId) {
-        const clientState = roomManager.getClientRoomState(roomId, player.id);
+      const pId = player.playerId || player.id;
+      if (player.id) {
+        const clientState = roomManager.getClientRoomState(roomId, pId);
         if (clientState) {
-          io.to(player.socketId).emit('room:updated', clientState);
+          io.to(player.id).emit('room:updated', clientState);
         }
       }
     }
@@ -40,6 +41,9 @@ export function registerGameHandlers(
     if (reconRes.success && reconRes.roomId) {
       socket.join(reconRes.roomId);
       broadcastRoomUpdate(reconRes.roomId);
+      if (reconRes.reconnectedNickname) {
+        socket.to(reconRes.roomId).emit('player:reconnected', { nickname: reconRes.reconnectedNickname });
+      }
     }
   }
 
@@ -79,13 +83,16 @@ export function registerGameHandlers(
   });
 
   // 3. Reconnect Room explicitly
-  socket.on('room:reconnect', (callback) => {
-    const playerId = getPlayerId();
-    const reconRes = roomManager.reconnectPlayer(playerId, socket.id);
+  socket.on('room:reconnect', (payload, callback) => {
+    const targetPlayerId = payload?.playerId || getPlayerId();
+    const reconRes = roomManager.reconnectPlayer(targetPlayerId, socket.id);
 
     if (reconRes.success && reconRes.roomId) {
       socket.join(reconRes.roomId);
       broadcastRoomUpdate(reconRes.roomId);
+      if (reconRes.reconnectedNickname) {
+        socket.to(reconRes.roomId).emit('player:reconnected', { nickname: reconRes.reconnectedNickname });
+      }
       callback({ success: true });
     } else {
       callback({ success: false, error: 'No active session found.' });
@@ -163,8 +170,9 @@ export function registerGameHandlers(
 
       // Check if someone won
       if (result.room.stage === 'GAME_OVER' && result.winner) {
+        const winnerId = result.winner.playerId || result.winner.id;
         io.to(result.room.roomId).emit('game:bingo', {
-          winnerId: result.winner.id,
+          winnerId,
           winnerNickname: result.winner.nickname,
         });
       }
@@ -184,21 +192,20 @@ export function registerGameHandlers(
   socket.on('room:leave', () => {
     const playerId = getPlayerId();
     const result = roomManager.leaveRoom(playerId);
-    if (result.roomId && result.room) {
+    if (result.roomId) {
       if (result.disconnectedNickname) {
         socket.to(result.roomId).emit('player:disconnected', { nickname: result.disconnectedNickname });
       }
-      broadcastRoomUpdate(result.roomId);
+      if (result.room) {
+        broadcastRoomUpdate(result.roomId);
+      }
     }
   });
 
-  // 10. Socket Disconnect
+  // 10. Socket Disconnect (Temporary or page refresh)
   socket.on('disconnect', () => {
     const result = roomManager.handleDisconnect(socket.id);
     if (result.roomId && result.room) {
-      if (result.disconnectedNickname) {
-        socket.to(result.roomId).emit('player:disconnected', { nickname: result.disconnectedNickname });
-      }
       broadcastRoomUpdate(result.roomId);
     }
   });

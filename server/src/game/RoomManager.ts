@@ -45,13 +45,14 @@ export class RoomManager {
 
     const roomId = this.generateRoomCode();
     const host: Player = {
-      id: playerId,
-      socketId,
+      id: socketId,
+      playerId,
       nickname,
       isHost: true,
       isReady: false,
       isBoardReady: false,
       wantsRematch: false,
+      isConnected: true,
     };
 
     const room: RoomState = {
@@ -88,9 +89,12 @@ export class RoomManager {
     }
 
     // Check if this player is already in the room (reconnecting)
-    const existingPlayer = room.players.find((p) => p.id === playerId);
+    const existingPlayer = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
     if (existingPlayer) {
-      existingPlayer.socketId = socketId;
+      existingPlayer.id = socketId;
+      existingPlayer.isConnected = true;
       this.socketToPlayer.set(socketId, playerId);
       this.playerToRoom.set(playerId, formattedId);
       return { success: true };
@@ -105,13 +109,14 @@ export class RoomManager {
     }
 
     const guest: Player = {
-      id: playerId,
-      socketId,
+      id: socketId,
+      playerId,
       nickname,
       isHost: false,
       isReady: false,
       isBoardReady: false,
       wantsRematch: false,
+      isConnected: true,
     };
 
     room.players.push(guest);
@@ -127,7 +132,7 @@ export class RoomManager {
   public reconnectPlayer(
     playerId: string,
     newSocketId: string
-  ): { success: boolean; roomId?: string; room?: RoomState } {
+  ): { success: boolean; roomId?: string; room?: RoomState; reconnectedNickname?: string } {
     const roomId = this.playerToRoom.get(playerId);
     if (!roomId) return { success: false };
 
@@ -137,17 +142,21 @@ export class RoomManager {
       return { success: false };
     }
 
-    const player = room.players.find((p) => p.id === playerId);
+    const player = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
     if (!player) {
       this.playerToRoom.delete(playerId);
       return { success: false };
     }
 
-    // Update socket mapping
-    player.socketId = newSocketId;
+    // Update socket mapping and connection state
+    player.id = newSocketId;
+    player.isConnected = true;
     this.socketToPlayer.set(newSocketId, playerId);
+    this.playerToRoom.set(playerId, roomId);
 
-    return { success: true, roomId, room };
+    return { success: true, roomId, room, reconnectedNickname: player.nickname };
   }
 
   /**
@@ -189,7 +198,9 @@ export class RoomManager {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { error: 'Room not found' };
 
-    const player = room.players.find((p) => p.id === playerId);
+    const player = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
     if (!player) return { error: 'Player not found' };
 
     player.isReady = !player.isReady;
@@ -235,7 +246,9 @@ export class RoomManager {
     // Save player's private board indexed by stable playerId
     room.boards[playerId] = board;
 
-    const player = room.players.find((p) => p.id === playerId);
+    const player = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
     if (player) {
       player.isBoardReady = true;
     }
@@ -269,13 +282,18 @@ export class RoomManager {
       return { error: 'Both players must be present for toss.' };
     }
 
+    const hostId = host.playerId || host.id;
+    const guestId = guest.playerId || guest.id;
+
     room.tossChoice = choice;
-    const { outcome, winnerId } = TossEngine.determineWinner(choice, host.id, guest.id);
+    const { outcome, winnerId } = TossEngine.determineWinner(choice, hostId, guestId);
     room.tossWinnerId = winnerId;
     room.currentTurnPlayerId = winnerId;
     room.stage = 'PLAYING';
 
-    const winnerPlayer = room.players.find((p) => p.id === winnerId);
+    const winnerPlayer = room.players.find(
+      (p) => p.playerId === winnerId || p.id === winnerId
+    );
 
     return {
       room,
@@ -317,7 +335,9 @@ export class RoomManager {
     // Record called number
     room.calledNumbers.push(numberCalled);
 
-    const caller = room.players.find((p) => p.id === playerId);
+    const caller = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
 
     // Recalculate line completion for both players
     let winningPlayer: Player | undefined = undefined;
@@ -326,12 +346,13 @@ export class RoomManager {
     if (!room.winningLines) room.winningLines = {};
 
     for (const p of room.players) {
-      const pBoard = room.boards[p.id];
+      const pId = p.playerId || p.id;
+      const pBoard = room.boards[pId];
       if (pBoard) {
         const evalResult = BingoEvaluator.evaluate(pBoard, room.calledNumbers);
 
-        room.completedLineCounts[p.id] = evalResult.completedLinesCount;
-        room.winningLines[p.id] = evalResult.completedLines;
+        room.completedLineCounts[pId] = evalResult.completedLinesCount;
+        room.winningLines[pId] = evalResult.completedLines;
 
         if (evalResult.hasWon && !winningPlayer) {
           winningPlayer = p;
@@ -342,12 +363,14 @@ export class RoomManager {
     // Check if winner was detected
     if (winningPlayer) {
       room.stage = 'GAME_OVER';
-      room.winnerId = winningPlayer.id;
+      room.winnerId = winningPlayer.playerId || winningPlayer.id;
     } else {
       // Switch turn to opponent
-      const opponent = room.players.find((p) => p.id !== playerId);
+      const opponent = room.players.find(
+        (p) => (p.playerId || p.id) !== playerId
+      );
       if (opponent) {
-        room.currentTurnPlayerId = opponent.id;
+        room.currentTurnPlayerId = opponent.playerId || opponent.id;
       }
     }
 
@@ -366,7 +389,9 @@ export class RoomManager {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { bothReadyForRematch: false };
 
-    const player = room.players.find((p) => p.id === playerId);
+    const player = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
     if (player) {
       player.wantsRematch = true;
     }
@@ -396,7 +421,7 @@ export class RoomManager {
 
   /**
    * Handle socket disconnect.
-   * Mark socketId = null to allow temporary reconnect without immediately destroying active game state.
+   * Marks socketId = '' and isConnected = false to allow temporary reconnect without immediately destroying active game state.
    */
   public handleDisconnect(
     socketId: string
@@ -412,39 +437,31 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return {};
 
-    const discPlayer = room.players.find((p) => p.id === playerId);
+    const discPlayer = room.players.find(
+      (p) => p.playerId === playerId || p.id === socketId
+    );
     if (discPlayer) {
-      discPlayer.socketId = null; // Mark temporarily disconnected
+      discPlayer.id = '';
+      discPlayer.isConnected = false;
     }
 
-    // If still in LOBBY and player disconnects, remove them after grace period or immediately if lobby
-    if (room.stage === 'LOBBY') {
-      room.players = room.players.filter((p) => p.id !== playerId);
-      this.playerToRoom.delete(playerId);
-
-      if (room.players.length === 0) {
-        this.rooms.delete(roomId);
-        return { roomId };
-      } else {
-        if (room.players[0]) {
-          room.players[0].isHost = true;
-        }
-      }
-    } else {
-      // If all players have been disconnected with no socket for > 15 mins, room can be cleaned up
-      const allDisconnected = room.players.every((p) => p.socketId === null);
-      if (allDisconnected) {
-        // Clean up empty abandoned room after 15 mins
-        setTimeout(() => {
-          const currentRoom = this.rooms.get(roomId);
-          if (currentRoom && currentRoom.players.every((p) => p.socketId === null)) {
-            for (const p of currentRoom.players) {
-              this.playerToRoom.delete(p.id);
-            }
-            this.rooms.delete(roomId);
+    // Clean up empty abandoned room only after 15 minutes of all players being disconnected
+    const allDisconnected = room.players.every(
+      (p) => p.isConnected === false || !p.id
+    );
+    if (allDisconnected) {
+      setTimeout(() => {
+        const currentRoom = this.rooms.get(roomId);
+        if (
+          currentRoom &&
+          currentRoom.players.every((p) => p.isConnected === false || !p.id)
+        ) {
+          for (const p of currentRoom.players) {
+            this.playerToRoom.delete(p.playerId || p.id);
           }
-        }, 15 * 60 * 1000);
-      }
+          this.rooms.delete(roomId);
+        }
+      }, 15 * 60 * 1000);
     }
 
     return { roomId, room, disconnectedNickname: discPlayer?.nickname };
@@ -462,15 +479,18 @@ export class RoomManager {
 
     if (!room) return {};
 
-    // Remove socket mapping
-    const player = room.players.find((p) => p.id === playerId);
+    const player = room.players.find(
+      (p) => p.playerId === playerId || p.id === playerId
+    );
     const nickname = player?.nickname;
 
-    if (player && player.socketId) {
-      this.socketToPlayer.delete(player.socketId);
+    if (player && player.id) {
+      this.socketToPlayer.delete(player.id);
     }
 
-    room.players = room.players.filter((p) => p.id !== playerId);
+    room.players = room.players.filter(
+      (p) => (p.playerId || p.id) !== playerId
+    );
 
     if (room.players.length === 0) {
       this.rooms.delete(roomId);
@@ -493,20 +513,25 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
 
-    const targetPlayer = room.players.find((p) => p.id === targetPlayerId);
+    const targetPlayer = room.players.find(
+      (p) => (p.playerId || p.id) === targetPlayerId
+    );
     const completedCounts = room.completedLineCounts || {};
     const lines = room.winningLines || {};
 
-    const publicPlayers = room.players.map((p) => ({
-      id: p.id,
-      nickname: p.nickname,
-      isHost: p.isHost,
-      isReady: p.isReady,
-      isBoardReady: p.isBoardReady,
-      wantsRematch: !!p.wantsRematch,
-      isConnected: p.socketId !== null,
-      completedLines: completedCounts[p.id] || 0,
-    }));
+    const publicPlayers = room.players.map((p) => {
+      const pId = p.playerId || p.id;
+      return {
+        id: pId,
+        nickname: p.nickname,
+        isHost: p.isHost,
+        isReady: p.isReady,
+        isBoardReady: p.isBoardReady,
+        wantsRematch: !!p.wantsRematch,
+        isConnected: p.isConnected !== false && !!p.id,
+        completedLines: completedCounts[pId] || 0,
+      };
+    });
 
     const myBoard = room.boards[targetPlayerId] || null;
     const myWinningLineIndices = lines[targetPlayerId] || [];
@@ -518,7 +543,7 @@ export class RoomManager {
       players: publicPlayers,
       myBoard,
       myPlayerId: targetPlayerId,
-      mySocketId: targetPlayer?.socketId || '',
+      mySocketId: targetPlayer?.id || '',
       tossChoice: room.tossChoice,
       tossWinnerId: room.tossWinnerId,
       currentTurnPlayerId: room.currentTurnPlayerId,

@@ -9,13 +9,14 @@ export type GameStage =
 export type CoinChoice = 'HEADS' | 'TAILS';
 
 export interface Player {
-  id: string; // Stable Player ID (e.g. player_xxxx)
-  socketId: string | null; // Current Socket ID or null if temporarily disconnected
+  id: string; // Current Socket ID or empty string if temporarily disconnected
+  playerId: string; // Stable client-generated ID (e.g. player_xxxx)
   nickname: string;
   isHost: boolean;
   isReady: boolean; // Ready for setup / toss
   isBoardReady: boolean; // Has submitted valid 5x5 board
   wantsRematch?: boolean;
+  isConnected?: boolean;
 }
 
 export type BingoBoardGrid = (number | null)[][]; // 5x5 grid
@@ -69,7 +70,7 @@ export interface ClientRoomState {
 export interface ClientToServerEvents {
   'room:create': (payload: { nickname: string }, callback: (res: { success: boolean; roomId?: string; error?: string }) => void) => void;
   'room:join': (payload: { roomId: string; nickname: string }, callback: (res: { success: boolean; error?: string }) => void) => void;
-  'room:reconnect': (callback: (res: { success: boolean; error?: string }) => void) => void;
+  'room:reconnect': (payload: { playerId: string }, callback: (res: { success: boolean; error?: string }) => void) => void;
   'room:toggle_ready': () => void;
   'board:submit': (payload: { board: number[] }, callback: (res: { success: boolean; error?: string }) => void) => void;
   'toss:choose': (payload: { choice: CoinChoice }) => void;

@@ -9,10 +9,25 @@ import { PlayerLeftModal } from './components/screens/PlayerLeftModal';
 import { Wifi, WifiOff, LogOut, X } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { roomState, isConnected, isReconnecting, errorMessage, clearErrorMessage, endSession } = useBingoSocket();
+  const { roomState, isConnected, isReconnecting, isRestoringSession, errorMessage, clearErrorMessage, endSession } = useBingoSocket();
 
   const renderCurrentScreen = () => {
-    if (!roomState) return <WelcomeScreen />;
+    if (!roomState) {
+      if (isRestoringSession) {
+        return (
+          <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
+            <div className="glass-panel p-8 rounded-3xl border border-white/10 text-center max-w-md shadow-2xl">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 animate-spin">
+                <Wifi className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Restoring Game Session...</h3>
+              <p className="text-xs text-slate-400">Reconnecting to your room. Please wait a moment.</p>
+            </div>
+          </div>
+        );
+      }
+      return <WelcomeScreen />;
+    }
 
     switch (roomState.stage) {
       case 'WELCOME':
