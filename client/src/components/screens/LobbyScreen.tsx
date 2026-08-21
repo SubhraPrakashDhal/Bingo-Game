@@ -15,9 +15,11 @@ export const LobbyScreen: React.FC = () => {
 
   if (!roomState) return null;
 
-  const me = roomState.players.find((p) => p.id === roomState.myPlayerId || p.id === roomState.mySocketId);
+  const me =
+    roomState.players.find((p) => p.id === roomState.myPlayerId || p.id === roomState.mySocketId) ||
+    (roomState.players.length === 1 ? roomState.players[0] : undefined);
   const opponent = roomState.players.find((p) => p.id !== me?.id);
-  const isHost = me?.isHost || false;
+  const isHost = me ? me.isHost : (roomState.players.length === 1 || roomState.players[0]?.id === roomState.myPlayerId);
 
   const selectedGameDef = AVAILABLE_GAMES.find((g) => g.id === roomState.selectedGame);
 
@@ -157,8 +159,16 @@ export const LobbyScreen: React.FC = () => {
               return (
                 <div
                   key={gameDef.id}
-                  onClick={() => isHost && handleSelectGame(gameDef.id)}
-                  className={`p-4 rounded-xl border text-left transition-all duration-200 ${
+                  role="button"
+                  tabIndex={isHost ? 0 : -1}
+                  onClick={() => handleSelectGame(gameDef.id)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && isHost) {
+                      e.preventDefault();
+                      handleSelectGame(gameDef.id);
+                    }
+                  }}
+                  className={`p-4 rounded-xl border text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 select-none ${
                     isHost ? 'cursor-pointer hover:border-blue-400/80 active:scale-[0.98]' : 'cursor-default'
                   } ${
                     isSelected

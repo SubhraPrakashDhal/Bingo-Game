@@ -139,7 +139,7 @@ export class RoomManager {
 
     room.players.push(guest);
     this.playerToRoom.set(playerId, formattedId);
-    this.socketToPlayer.set(socketId, formattedId);
+    this.socketToPlayer.set(socketId, playerId);
 
     return { success: true };
   }
@@ -155,7 +155,7 @@ export class RoomManager {
     if (!room) return { success: false, error: 'Room not found' };
 
     const player = room.players.find(
-      (p) => (p.playerId || p.id) === playerId
+      (p) => p.playerId === playerId || p.id === playerId || this.socketToPlayer.get(p.id) === playerId
     );
     if (!player || !player.isHost) {
       return { success: false, error: 'Only the host can select a game.' };
@@ -285,9 +285,31 @@ export class RoomManager {
   }
 
   public getRoomByPlayerId(playerId: string): RoomState | undefined {
-    const roomId = this.playerToRoom.get(playerId);
-    if (!roomId) return undefined;
-    return this.rooms.get(roomId);
+    let roomId = this.playerToRoom.get(playerId);
+    if (roomId && this.rooms.has(roomId)) {
+      return this.rooms.get(roomId);
+    }
+
+    const mappedPlayerId = this.socketToPlayer.get(playerId);
+    if (mappedPlayerId) {
+      roomId = this.playerToRoom.get(mappedPlayerId);
+      if (roomId && this.rooms.has(roomId)) {
+        return this.rooms.get(roomId);
+      }
+    }
+
+    for (const room of this.rooms.values()) {
+      const match = room.players.find(
+        (p) => p.playerId === playerId || p.id === playerId
+      );
+      if (match) {
+        if (match.playerId) this.playerToRoom.set(match.playerId, room.roomId);
+        if (match.id) this.socketToPlayer.set(match.id, match.playerId || match.id);
+        return room;
+      }
+    }
+
+    return undefined;
   }
 
   public getRoomBySocket(socketId: string): RoomState | undefined {

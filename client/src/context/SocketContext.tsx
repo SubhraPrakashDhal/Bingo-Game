@@ -198,6 +198,17 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     });
 
+    newSocket.on('game_selection_updated', ({ selectedGame }) => {
+      console.log('Game selection updated:', selectedGame);
+      setRoomState((prevState) => {
+        if (!prevState) return prevState;
+        return {
+          ...prevState,
+          selectedGame,
+        };
+      });
+    });
+
     newSocket.on('number:called', (data) => {
       setCalledNotification(data);
       setTimeout(() => {
@@ -260,9 +271,14 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const selectGame = (game: GameType) => {
+    setRoomState((prev) => (prev ? { ...prev, selectedGame: game } : prev));
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
       socket.emit('room:select_game', { game }, (res) => {
+        if (res && !res.success && res.error) {
+          console.error('Select game failed on server:', res.error);
+          setErrorMessage(res.error);
+        }
         resolve(res || { success: true });
       });
     });
