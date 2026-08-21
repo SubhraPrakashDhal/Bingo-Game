@@ -274,7 +274,13 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setRoomState((prev) => (prev ? { ...prev, selectedGame: game } : prev));
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      
+      const timer = setTimeout(() => {
+        resolve({ success: false, error: 'Select game timed out' });
+      }, 5000);
+
       socket.emit('room:select_game', { game }, (res) => {
+        clearTimeout(timer);
         if (res && !res.success && res.error) {
           console.error('Select game failed on server:', res.error);
           setErrorMessage(res.error);
@@ -287,7 +293,13 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const startGame = () => {
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+
+      const timer = setTimeout(() => {
+        resolve({ success: false, error: 'Start game request timed out. Please try again.' });
+      }, 5000);
+
       socket.emit('room:start_game', (res) => {
+        clearTimeout(timer);
         if (res && !res.success && res.error) {
           console.error('Start game failed on server:', res.error);
           setErrorMessage(res.error);

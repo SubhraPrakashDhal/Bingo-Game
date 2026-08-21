@@ -39,8 +39,11 @@ export const LobbyScreen: React.FC = () => {
   const handleStartGame = async () => {
     if (!isHost || roomState.players.length < 2 || !roomState.selectedGame) return;
     setIsStarting(true);
-    await startGame();
-    setIsStarting(false);
+    try {
+      await startGame();
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   return (

@@ -115,33 +115,43 @@ export function registerGameHandlers(
 
   // 3. Select Game (Host only, server-authoritative)
   socket.on('room:select_game', ({ game }, callback) => {
-    const playerId = getPlayerId();
-    const result = roomManager.selectGame(playerId, game);
-    if (!result.success) {
-      if (typeof callback === 'function') callback({ success: false, error: result.error });
-      return;
-    }
+    try {
+      const playerId = getPlayerId();
+      const result = roomManager.selectGame(playerId, game);
+      if (!result.success) {
+        if (typeof callback === 'function') callback({ success: false, error: result.error });
+        return;
+      }
 
-    if (result.room) {
-      io.to(result.room.roomId).emit('game_selection_updated', { selectedGame: game });
-      broadcastRoomUpdate(result.room.roomId);
+      if (result.room) {
+        io.to(result.room.roomId).emit('game_selection_updated', { selectedGame: game });
+        broadcastRoomUpdate(result.room.roomId);
+      }
+      if (typeof callback === 'function') callback({ success: true });
+    } catch (err: any) {
+      console.error('Error selecting game:', err);
+      if (typeof callback === 'function') callback({ success: false, error: err?.message || 'Failed to select game' });
     }
-    if (typeof callback === 'function') callback({ success: true });
   });
 
   // 4. Start Game (Host only, server-authoritative)
   socket.on('room:start_game', (callback) => {
-    const playerId = getPlayerId();
-    const result = roomManager.startGame(playerId);
-    if (!result.success) {
-      if (typeof callback === 'function') callback({ success: false, error: result.error });
-      return;
-    }
+    try {
+      const playerId = getPlayerId();
+      const result = roomManager.startGame(playerId);
+      if (!result.success) {
+        if (typeof callback === 'function') callback({ success: false, error: result.error });
+        return;
+      }
 
-    if (result.room) {
-      broadcastRoomUpdate(result.room.roomId);
+      if (result.room) {
+        broadcastRoomUpdate(result.room.roomId);
+      }
+      if (typeof callback === 'function') callback({ success: true });
+    } catch (err: any) {
+      console.error('Error starting game:', err);
+      if (typeof callback === 'function') callback({ success: false, error: err?.message || 'Failed to start game' });
     }
-    if (typeof callback === 'function') callback({ success: true });
   });
 
   // 5. Return to Common Lobby after game end
