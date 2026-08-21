@@ -24,6 +24,7 @@ export function registerGameHandlers(
     const room = roomManager.getRoom(roomId);
     if (!room) return;
 
+    // 1. Direct emission using registered player socket IDs
     for (const player of room.players) {
       const pId = player.playerId || player.id;
       if (player.id) {
@@ -33,6 +34,35 @@ export function registerGameHandlers(
         }
       }
     }
+
+    // 2. Dynamic lookup & sync for all active sockets joined in room.roomId
+    io.in(room.roomId)
+      .fetchSockets()
+      .then((sockets) => {
+        for (const s of sockets) {
+          const authPId = s.handshake.auth?.playerId;
+          const mappedPId = roomManager.getPlayerIdBySocket(s.id);
+          const activePId = authPId || mappedPId;
+
+          const player = room.players.find(
+            (p) => (activePId && (p.playerId === activePId || p.id === activePId)) || p.id === s.id
+          );
+
+          if (player) {
+            // Keep live socket ID updated on server
+            player.id = s.id;
+            player.isConnected = true;
+            const pId = player.playerId || player.id;
+            const clientState = roomManager.getClientRoomState(roomId, pId);
+            if (clientState) {
+              s.emit('room:updated', clientState);
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Error fetching sockets for broadcast update:', err);
+      });
   };
 
   // Auto Reconnect Check on Connection

@@ -193,7 +193,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setIsReconnecting(false);
       setIsRestoringSession(false);
       if (state.roomId) {
-        const myPlayer = state.players.find((p) => p.id === playerId);
+        const myPlayer = state.players.find((p) => p.id === state.myPlayerId || p.id === playerId);
         saveSessionRoom(state.roomId, myPlayer?.nickname || 'Player');
       }
     });

@@ -255,29 +255,21 @@ export class RoomManager {
     playerId: string,
     newSocketId: string
   ): { success: boolean; roomId?: string; room?: RoomState; reconnectedNickname?: string } {
-    const roomId = this.playerToRoom.get(playerId);
-    if (!roomId) return { success: false };
-
-    const room = this.rooms.get(roomId);
-    if (!room) {
-      this.playerToRoom.delete(playerId);
-      return { success: false };
-    }
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false };
 
     const player = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId
+      (p) => p.playerId === playerId || p.id === playerId || this.socketToPlayer.get(p.id) === playerId
     );
-    if (!player) {
-      this.playerToRoom.delete(playerId);
-      return { success: false };
-    }
+    if (!player) return { success: false };
 
     player.id = newSocketId;
     player.isConnected = true;
-    this.socketToPlayer.set(newSocketId, playerId);
-    this.playerToRoom.set(playerId, roomId);
+    const actualPlayerId = player.playerId || player.id;
+    this.socketToPlayer.set(newSocketId, actualPlayerId);
+    this.playerToRoom.set(actualPlayerId, room.roomId);
 
-    return { success: true, roomId, room, reconnectedNickname: player.nickname };
+    return { success: true, roomId: room.roomId, room, reconnectedNickname: player.nickname };
   }
 
   public getRoom(roomId: string): RoomState | undefined {
