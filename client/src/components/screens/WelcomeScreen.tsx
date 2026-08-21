@@ -55,39 +55,64 @@ export const WelcomeScreen: React.FC = () => {
           <span>Real-Time Private 2-Player Experience</span>
         </div>
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-blue-400 bg-clip-text text-transparent mb-3">
-          BINGO PRIVATE
+          GAMES PRIVATE
         </h1>
         <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-          Create a private room, invite a friend, configure your strategic 5×5 board, and compete head-to-head in real time.
+          Create a private room, invite a friend, choose a game, and play together in real time.
         </p>
       </div>
 
       <GlassCard className="w-full max-w-md">
-        {/* Toggle Mode */}
-        <div className="grid grid-cols-2 p-1 bg-slate-900/60 rounded-xl mb-6 border border-white/5">
+        {/* Toggle Mode - Premium Segmented Control */}
+        <div className="relative flex p-1 bg-slate-900/60 rounded-xl mb-6 border border-white/5 shadow-inner">
+          {/* Animated Background Indicator */}
+          <div
+            className={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-lg transition-all duration-[300ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
+              mode === 'create'
+                ? 'translate-x-0 bg-gradient-to-r from-blue-600 to-blue-500 shadow-[0_0_12px_rgba(37,99,235,0.3)]'
+                : 'translate-x-full bg-gradient-to-r from-purple-600 to-indigo-500 shadow-[0_0_12px_rgba(147,51,234,0.3)]'
+            }`}
+          />
+
+          {/* Create Room Button */}
           <button
             type="button"
+            aria-pressed={mode === 'create'}
             onClick={() => { setMode('create'); setErrorMsg(null); }}
-            className={`py-2.5 rounded-lg font-medium text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
+            className={`group relative z-10 flex-1 py-2.5 rounded-lg font-medium text-xs md:text-sm flex items-center justify-center gap-2 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 active:scale-[0.98] ${
               mode === 'create'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-white font-semibold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 hover:scale-[1.01]'
             }`}
           >
-            <PlusCircle className="w-4 h-4" />
+            <PlusCircle 
+              className={`w-4 h-4 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                mode === 'create' 
+                  ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]' 
+                  : 'opacity-70 group-hover:opacity-100 group-hover:scale-105'
+              }`} 
+            />
             Create Room
           </button>
 
+          {/* Join Private Room Button */}
           <button
             type="button"
+            aria-pressed={mode === 'join'}
             onClick={() => { setMode('join'); setErrorMsg(null); }}
-            className={`py-2.5 rounded-lg font-medium text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
+            className={`group relative z-10 flex-1 py-2.5 rounded-lg font-medium text-xs md:text-sm flex items-center justify-center gap-2 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 active:scale-[0.98] ${
               mode === 'join'
-                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-white font-semibold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 hover:scale-[1.01]'
             }`}
           >
-            <LogIn className="w-4 h-4" />
+            <LogIn 
+              className={`w-4 h-4 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                mode === 'join' 
+                  ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]' 
+                  : 'opacity-70 group-hover:opacity-100 group-hover:scale-105'
+              }`} 
+            />
             Join Private Room
           </button>
         </div>
@@ -110,7 +135,7 @@ export const WelcomeScreen: React.FC = () => {
                 placeholder="e.g. MasterBingo"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
+                className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white placeholder-slate-500 outline-none focus:outline-none focus:border-white/30 focus:bg-slate-900/90 focus:ring-0 focus:shadow-none transition-colors duration-200 text-sm"
               />
             </div>
 
@@ -137,7 +162,7 @@ export const WelcomeScreen: React.FC = () => {
                 placeholder="e.g. Challenger2"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-sm mb-4"
+                className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white placeholder-slate-500 outline-none focus:outline-none focus:border-white/30 focus:bg-slate-900/90 focus:ring-0 focus:shadow-none transition-colors duration-200 text-sm mb-4"
               />
 
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
@@ -149,7 +174,7 @@ export const WelcomeScreen: React.FC = () => {
                 placeholder="e.g. BINGO7"
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-sm font-mono tracking-widest text-center uppercase"
+                className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white placeholder-slate-500 outline-none focus:outline-none focus:border-white/30 focus:bg-slate-900/90 focus:ring-0 focus:shadow-none transition-colors duration-200 text-sm font-mono tracking-widest text-center uppercase"
               />
             </div>
 

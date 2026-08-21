@@ -5,6 +5,8 @@ import {
   ServerToClientEvents,
   ClientRoomState,
   CoinChoice,
+  GameType,
+  LineType,
 } from '../../../shared/types';
 
 interface BingoSession {
@@ -13,11 +15,11 @@ interface BingoSession {
   nickname?: string;
 }
 
-const SESSION_KEY = 'bingo_session';
+const SESSION_KEY = 'games_private_session';
 
 const getOrCreatePlayerId = (): string => {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed.playerId === 'string') {
@@ -25,41 +27,40 @@ const getOrCreatePlayerId = (): string => {
       }
     }
   } catch (err) {
-    console.error('Failed to read bingo_session from localStorage', err);
+    console.error('Failed to read games_private_session from sessionStorage', err);
   }
 
-  // Generate new stable Player ID
   const newPlayerId = 'player_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ playerId: newPlayerId }));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ playerId: newPlayerId }));
   } catch (e) {
-    console.error('Failed to write bingo_session', e);
+    console.error('Failed to write games_private_session', e);
   }
   return newPlayerId;
 };
 
 const saveSessionRoom = (roomId: string, nickname: string) => {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     const session: BingoSession = raw ? JSON.parse(raw) : { playerId: getOrCreatePlayerId() };
     session.roomId = roomId;
     session.nickname = nickname;
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   } catch (err) {
-    console.error('Failed to save room to bingo_session', err);
+    console.error('Failed to save room to session', err);
   }
 };
 
 const clearSessionRoom = () => {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (raw) {
       const session: BingoSession = JSON.parse(raw);
       delete session.roomId;
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
     }
   } catch (err) {
-    console.error('Failed to clear room from bingo_session', err);
+    console.error('Failed to clear room from session', err);
   }
 };
 
@@ -77,10 +78,16 @@ interface SocketContextType {
   rematchNotification: { nickname: string } | null;
   createRoom: (nickname: string) => Promise<{ success: boolean; roomId?: string; error?: string }>;
   joinRoom: (roomId: string, nickname: string) => Promise<{ success: boolean; error?: string }>;
+  selectGame: (game: GameType) => Promise<{ success: boolean; error?: string }>;
+  startGame: () => Promise<{ success: boolean; error?: string }>;
+  returnToLobby: () => void;
   toggleReady: () => void;
   submitBoard: (board: number[]) => Promise<{ success: boolean; error?: string }>;
   callNumber: (num: number) => Promise<{ success: boolean; error?: string }>;
   requestRematch: () => void;
+  makeDotsMove: (type: LineType, row: number, col: number) => Promise<{ success: boolean; error?: string }>;
+  requestDotsRematch: () => void;
+  sendChatMessage: (message: string) => Promise<{ success: boolean; error?: string }>;
   leaveRoom: () => void;
   endSession: () => void;
   clearErrorMessage: () => void;
@@ -96,7 +103,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isRestoringSession, setIsRestoringSession] = useState<boolean>(() => {
     try {
-      const raw = localStorage.getItem(SESSION_KEY);
+      const raw = sessionStorage.getItem(SESSION_KEY);
       if (raw) {
         const session: BingoSession = JSON.parse(raw);
         return !!session.roomId;
@@ -104,6 +111,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     } catch (e) {}
     return false;
   });
+
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playerLeftNotification, setPlayerLeftNotification] = useState<{ nickname: string } | null>(null);
@@ -121,7 +129,17 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   } | null>(null);
 
   useEffect(() => {
-    const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const getServerUrl = (): string => {
+      if (import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+      }
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        return window.location.origin;
+      }
+      return 'http://localhost:3001';
+    };
+
+    const serverUrl = getServerUrl();
     const newSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io(serverUrl, {
       auth: { playerId },
       autoConnect: true,
@@ -133,13 +151,12 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
-      console.log(`Connected to Bingo server. Socket: ${newSocket.id}, PlayerId: ${playerId}`);
+      console.log(`Connected to GAMES PRIVATE server. Socket: ${newSocket.id}, PlayerId: ${playerId}`);
       setIsConnected(true);
       setIsReconnecting(false);
 
-      // Check if session has a saved room to restore
       try {
-        const raw = localStorage.getItem(SESSION_KEY);
+        const raw = sessionStorage.getItem(SESSION_KEY);
         if (raw) {
           const session: BingoSession = JSON.parse(raw);
           if (session.roomId) {
@@ -162,7 +179,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Disconnected from Bingo server');
+      console.log('Disconnected from GAMES PRIVATE server');
       setIsConnected(false);
       setIsReconnecting(true);
     });
@@ -175,7 +192,6 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
       setIsReconnecting(false);
       setIsRestoringSession(false);
-      // Persist active roomId to localStorage session
       if (state.roomId) {
         const myPlayer = state.players.find((p) => p.id === playerId);
         saveSessionRoom(state.roomId, myPlayer?.nickname || 'Player');
@@ -197,13 +213,16 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
 
     newSocket.on('rematch:requested', ({ nickname }) => {
-      console.log('Rematch requested event:', nickname);
       setRematchNotification({ nickname });
     });
 
     newSocket.on('player:disconnected', ({ nickname }) => {
-      console.log('Player disconnected event:', nickname);
-      setPlayerLeftNotification({ nickname });
+      setRoomState((currentState) => {
+        if (currentState) {
+          setPlayerLeftNotification({ nickname });
+        }
+        return currentState;
+      });
     });
 
     newSocket.on('error:message', ({ message }) => {
@@ -240,6 +259,28 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
   };
 
+  const selectGame = (game: GameType) => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('room:select_game', { game }, (res) => {
+        resolve(res || { success: true });
+      });
+    });
+  };
+
+  const startGame = () => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('room:start_game', (res) => {
+        resolve(res || { success: true });
+      });
+    });
+  };
+
+  const returnToLobby = () => {
+    if (socket) socket.emit('room:return_to_lobby');
+  };
+
   const toggleReady = () => {
     if (socket) socket.emit('room:toggle_ready');
   };
@@ -267,23 +308,47 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setRematchNotification(null);
   };
 
+  const makeDotsMove = (type: LineType, row: number, col: number) => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('dots:move', { type, row, col }, (res) => {
+        resolve(res || { success: true });
+      });
+    });
+  };
+
+  const requestDotsRematch = () => {
+    if (socket) socket.emit('dots:rematch');
+  };
+
+  const sendChatMessage = (message: string) => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('send_game_chat_message', { message }, (res) => {
+        resolve(res || { success: true });
+      });
+    });
+  };
+
   const leaveRoom = () => {
     if (socket) socket.emit('room:leave');
     clearSessionRoom();
     setRoomState(null);
     setRematchNotification(null);
+    setPlayerLeftNotification(null);
     setIsRestoringSession(false);
   };
 
   const endSession = () => {
     if (socket) socket.emit('room:leave');
     try {
-      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(SESSION_KEY);
     } catch (err) {
-      console.error('Failed to clear bingo_session', err);
+      console.error('Failed to clear games_private_session', err);
     }
     setRoomState(null);
     setRematchNotification(null);
+    setPlayerLeftNotification(null);
     setIsRestoringSession(false);
   };
 
@@ -306,10 +371,16 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         rematchNotification,
         createRoom,
         joinRoom,
+        selectGame,
+        startGame,
+        returnToLobby,
         toggleReady,
         submitBoard,
         callNumber,
         requestRematch,
+        makeDotsMove,
+        requestDotsRematch,
+        sendChatMessage,
         leaveRoom,
         endSession,
         clearErrorMessage,

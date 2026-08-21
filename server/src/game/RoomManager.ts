@@ -3,16 +3,32 @@ import {
   ClientRoomState,
   Player,
   CoinChoice,
+  GameType,
+  LineType,
+  GameChatMessage,
 } from '../../../shared/types';
 import { BingoEvaluator } from './BingoEvaluator';
 import { TossEngine } from './TossEngine';
+import { DotsAndBoxesGame } from './DotsAndBoxesGame';
+import { IGameEngine } from '../games/core/IGameEngine';
+import { GameRegistry } from '../games/core/GameRegistry';
+import { DotsEngine } from '../games/dots/DotsEngine';
 
 export class RoomManager {
   private rooms: Map<string, RoomState> = new Map();
+  private activeGameEngines: Map<string, IGameEngine> = new Map();
   // Stable Player ID -> Room ID lookup
   private playerToRoom: Map<string, string> = new Map();
   // Socket ID -> Stable Player ID lookup
   private socketToPlayer: Map<string, string> = new Map();
+
+  private getDotsGameInstance(roomId: string): DotsAndBoxesGame | undefined {
+    const engine = this.activeGameEngines.get(roomId);
+    if (engine && engine instanceof DotsEngine) {
+      return engine.getDotsGameInstance();
+    }
+    return undefined;
+  }
 
   /**
    * Generates a 6-character room code.
@@ -58,11 +74,13 @@ export class RoomManager {
     const room: RoomState = {
       roomId,
       stage: 'LOBBY',
+      selectedGame: null,
       players: [host],
       boards: {},
       calledNumbers: [],
       winningLines: {},
       completedLineCounts: {},
+      chatMessages: [],
     };
 
     this.rooms.set(roomId, room);
@@ -121,9 +139,113 @@ export class RoomManager {
 
     room.players.push(guest);
     this.playerToRoom.set(playerId, formattedId);
-    this.socketToPlayer.set(socketId, playerId);
+    this.socketToPlayer.set(socketId, formattedId);
 
     return { success: true };
+  }
+
+  /**
+   * Selects a game (Host only).
+   */
+  public selectGame(
+    playerId: string,
+    game: GameType
+  ): { success: boolean; room?: RoomState; error?: string } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const player = room.players.find(
+      (p) => (p.playerId || p.id) === playerId
+    );
+    if (!player || !player.isHost) {
+      return { success: false, error: 'Only the host can select a game.' };
+    }
+
+    if (room.stage !== 'LOBBY') {
+      return { success: false, error: 'Game selection is locked during match.' };
+    }
+
+    room.selectedGame = game;
+    return { success: true, room };
+  }
+
+  /**
+   * Starts selected game (Host only).
+   */
+  public startGame(
+    playerId: string
+  ): { success: boolean; room?: RoomState; error?: string } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const player = room.players.find(
+      (p) => (p.playerId || p.id) === playerId
+    );
+    if (!player || !player.isHost) {
+      return { success: false, error: 'Only the host can start the game.' };
+    }
+
+    if (room.players.length < 2) {
+      return { success: false, error: 'Need 2 players to start game.' };
+    }
+
+    if (!room.selectedGame) {
+      return { success: false, error: 'Please choose a game first.' };
+    }
+
+    if (room.selectedGame === 'bingo') {
+      room.stage = 'BOARD_SETUP';
+      room.boards = {};
+      room.calledNumbers = [];
+      room.tossChoice = undefined;
+      room.tossWinnerId = undefined;
+      room.currentTurnPlayerId = undefined;
+      room.winnerId = undefined;
+      room.winningLines = {};
+      room.completedLineCounts = {};
+      room.chatMessages = [];
+      for (const p of room.players) {
+        p.isBoardReady = false;
+        p.isReady = true;
+        p.wantsRematch = false;
+      }
+    } else if (room.selectedGame === 'dots') {
+      room.stage = 'DOTS_PLAYING';
+      const playerIds = room.players.map((p) => p.playerId || p.id);
+      const engine = GameRegistry.create(room.selectedGame, room.roomId, playerIds);
+      this.activeGameEngines.set(room.roomId, engine);
+      room.chatMessages = [];
+    }
+
+    return { success: true, room };
+  }
+
+  /**
+   * Return to lobby from ended game.
+   */
+  public returnToLobby(playerId: string): { success: boolean; room?: RoomState } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false };
+
+    room.stage = 'LOBBY';
+    room.boards = {};
+    room.calledNumbers = [];
+    room.tossChoice = undefined;
+    room.tossWinnerId = undefined;
+    room.currentTurnPlayerId = undefined;
+    room.winnerId = undefined;
+    room.winningLines = {};
+    room.completedLineCounts = {};
+    room.chatMessages = [];
+    this.activeGameEngines.delete(room.roomId);
+
+    for (const p of room.players) {
+      p.isReady = false;
+      p.isBoardReady = false;
+      p.wantsRematch = false;
+    }
+
+    return { success: true, room };
   }
 
   /**
@@ -150,7 +272,6 @@ export class RoomManager {
       return { success: false };
     }
 
-    // Update socket mapping and connection state
     player.id = newSocketId;
     player.isConnected = true;
     this.socketToPlayer.set(newSocketId, playerId);
@@ -159,63 +280,39 @@ export class RoomManager {
     return { success: true, roomId, room, reconnectedNickname: player.nickname };
   }
 
-  /**
-   * Gets room by room code.
-   */
   public getRoom(roomId: string): RoomState | undefined {
     return this.rooms.get(roomId);
   }
 
-  /**
-   * Gets room by stable playerId.
-   */
   public getRoomByPlayerId(playerId: string): RoomState | undefined {
     const roomId = this.playerToRoom.get(playerId);
     if (!roomId) return undefined;
     return this.rooms.get(roomId);
   }
 
-  /**
-   * Gets room by socket ID.
-   */
   public getRoomBySocket(socketId: string): RoomState | undefined {
     const playerId = this.socketToPlayer.get(socketId);
     if (!playerId) return undefined;
     return this.getRoomByPlayerId(playerId);
   }
 
-  /**
-   * Gets stable playerId by socket ID.
-   */
   public getPlayerIdBySocket(socketId: string): string | undefined {
     return this.socketToPlayer.get(socketId);
   }
 
-  /**
-   * Toggles player readiness in lobby.
-   */
   public toggleReady(playerId: string): { room?: RoomState; error?: string } {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { error: 'Room not found' };
 
     const player = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId
+      (p) => (p.playerId || p.id) === playerId
     );
     if (!player) return { error: 'Player not found' };
 
     player.isReady = !player.isReady;
-
-    // Check if both players are ready to proceed to BOARD_SETUP
-    if (room.players.length === 2 && room.players.every((p) => p.isReady)) {
-      room.stage = 'BOARD_SETUP';
-    }
-
     return { room };
   }
 
-  /**
-   * Validates and submits a player's 5x5 board setup.
-   */
   public submitBoard(
     playerId: string,
     board: number[]
@@ -227,7 +324,6 @@ export class RoomManager {
       return { success: false, error: 'Board setup is not currently open.' };
     }
 
-    // Validate board numbers (must be 25 unique integers 1-25)
     if (!Array.isArray(board) || board.length !== 25) {
       return { success: false, error: 'Invalid board size. Board must contain exactly 25 numbers.' };
     }
@@ -243,17 +339,15 @@ export class RoomManager {
       };
     }
 
-    // Save player's private board indexed by stable playerId
     room.boards[playerId] = board;
 
     const player = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId
+      (p) => (p.playerId || p.id) === playerId
     );
     if (player) {
       player.isBoardReady = true;
     }
 
-    // If both players submitted boards, advance to TOSS stage
     if (room.players.length === 2 && room.players.every((p) => p.isBoardReady)) {
       room.stage = 'TOSS';
     }
@@ -261,9 +355,6 @@ export class RoomManager {
     return { success: true, room };
   }
 
-  /**
-   * Executes coin toss with host's choice and sets first turn.
-   */
   public executeToss(
     playerId: string,
     choice: CoinChoice
@@ -292,7 +383,7 @@ export class RoomManager {
     room.stage = 'PLAYING';
 
     const winnerPlayer = room.players.find(
-      (p) => p.playerId === winnerId || p.id === winnerId
+      (p) => (p.playerId || p.id) === winnerId
     );
 
     return {
@@ -306,9 +397,6 @@ export class RoomManager {
     };
   }
 
-  /**
-   * Process calling a number during turn.
-   */
   public callNumber(
     playerId: string,
     numberCalled: number
@@ -332,16 +420,13 @@ export class RoomManager {
       return { success: false, error: 'This number has already been called!' };
     }
 
-    // Record called number
     room.calledNumbers.push(numberCalled);
 
     const caller = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId
+      (p) => (p.playerId || p.id) === playerId
     );
 
-    // Recalculate line completion for both players
     const winningPlayers: Player[] = [];
-
     if (!room.completedLineCounts) room.completedLineCounts = {};
     if (!room.winningLines) room.winningLines = {};
 
@@ -369,20 +454,16 @@ export class RoomManager {
       );
 
       if (callerWon) {
-        // If caller achieved Bingo (including simultaneous Bingo with opponent), caller gets explicit priority
         winningPlayer = caller || winningPlayers[0];
       } else {
-        // Only opponent achieved Bingo from this call
         winningPlayer = winningPlayers[0];
       }
     }
 
-    // Check if winner was detected
     if (winningPlayer) {
       room.stage = 'GAME_OVER';
       room.winnerId = winningPlayer.playerId || winningPlayer.id;
     } else {
-      // Switch turn to opponent
       const opponent = room.players.find(
         (p) => (p.playerId || p.id) !== playerId
       );
@@ -399,15 +480,12 @@ export class RoomManager {
     };
   }
 
-  /**
-   * Process rematch request.
-   */
   public requestRematch(playerId: string): { room?: RoomState; bothReadyForRematch: boolean } {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { bothReadyForRematch: false };
 
     const player = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId
+      (p) => (p.playerId || p.id) === playerId
     );
     if (player) {
       player.wantsRematch = true;
@@ -416,7 +494,6 @@ export class RoomManager {
     const bothReady = room.players.length === 2 && room.players.every((p) => p.wantsRematch);
 
     if (bothReady) {
-      // Reset room for new game setup
       room.stage = 'BOARD_SETUP';
       room.boards = {};
       room.calledNumbers = [];
@@ -426,6 +503,7 @@ export class RoomManager {
       room.winnerId = undefined;
       room.winningLines = {};
       room.completedLineCounts = {};
+      room.chatMessages = [];
 
       for (const p of room.players) {
         p.isBoardReady = false;
@@ -437,9 +515,91 @@ export class RoomManager {
   }
 
   /**
-   * Handle socket disconnect.
-   * Marks socketId = '' and isConnected = false to allow temporary reconnect without immediately destroying active game state.
+   * Dots & Boxes Move execution.
    */
+  public makeDotsMove(
+    playerId: string,
+    type: LineType,
+    row: number,
+    col: number
+  ): { success: boolean; room?: RoomState; error?: string } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const dotsGame = this.getDotsGameInstance(room.roomId);
+    if (!dotsGame) return { success: false, error: 'Dots match not active' };
+
+    const res = dotsGame.makeMove(playerId, type, row, col);
+    if (!res.success) return { success: false, error: res.message };
+
+    const state = dotsGame.getDotsState();
+    if (state.winnerId !== null) {
+      room.stage = 'DOTS_ENDED';
+    }
+
+    return { success: true, room };
+  }
+
+  /**
+   * Dots & Boxes Rematch request.
+   */
+  public requestDotsRematch(playerId: string): { success: boolean; room?: RoomState; isRestarted: boolean } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, isRestarted: false };
+
+    const dotsGame = this.getDotsGameInstance(room.roomId);
+    if (!dotsGame) return { success: false, isRestarted: false };
+
+    const res = dotsGame.requestRematch(playerId);
+    if (res.isRestarted) {
+      room.stage = 'DOTS_PLAYING';
+      room.chatMessages = [];
+      dotsGame.clearMessages();
+    }
+
+    return { success: true, room, isRestarted: res.isRestarted };
+  }
+
+  /**
+   * Process in-game chat message for both games.
+   */
+  public addChatMessage(
+    playerId: string,
+    messageText: string
+  ): { success: boolean; message?: GameChatMessage; room?: RoomState; error?: string } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const sender = room.players.find(
+      (p) => (p.playerId || p.id) === playerId
+    );
+    if (!sender) return { success: false, error: 'Player not found in room' };
+
+    const cleanText = (messageText || '').trim().slice(0, 200);
+    if (!cleanText) return { success: false, error: 'Message cannot be empty' };
+
+    const chatMsg: GameChatMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      roomId: room.roomId,
+      senderId: playerId,
+      senderName: sender.nickname,
+      message: cleanText,
+      text: cleanText,
+      timestamp: Date.now(),
+    };
+
+    if (!room.chatMessages) room.chatMessages = [];
+    room.chatMessages.push(chatMsg);
+    if (room.chatMessages.length > 50) room.chatMessages.shift();
+
+    const dotsGame = this.getDotsGameInstance(room.roomId);
+    if (dotsGame) {
+      dotsGame.addMessage(playerId, sender.nickname, cleanText);
+    }
+
+    return { success: true, message: chatMsg, room };
+  }
+
   public handleDisconnect(
     socketId: string
   ): { roomId?: string; room?: RoomState; disconnectedNickname?: string } {
@@ -455,14 +615,13 @@ export class RoomManager {
     if (!room) return {};
 
     const discPlayer = room.players.find(
-      (p) => p.playerId === playerId || p.id === socketId
+      (p) => (p.playerId || p.id) === playerId || p.id === socketId
     );
     if (discPlayer) {
       discPlayer.id = '';
       discPlayer.isConnected = false;
     }
 
-    // Clean up empty abandoned room only after 15 minutes of all players being disconnected
     const allDisconnected = room.players.every(
       (p) => p.isConnected === false || !p.id
     );
@@ -476,6 +635,7 @@ export class RoomManager {
           for (const p of currentRoom.players) {
             this.playerToRoom.delete(p.playerId || p.id);
           }
+          this.activeGameEngines.delete(roomId);
           this.rooms.delete(roomId);
         }
       }, 15 * 60 * 1000);
@@ -484,9 +644,6 @@ export class RoomManager {
     return { roomId, room, disconnectedNickname: discPlayer?.nickname };
   }
 
-  /**
-   * Explicit leave room by player.
-   */
   public leaveRoom(playerId: string): { roomId?: string; room?: RoomState; disconnectedNickname?: string } {
     const roomId = this.playerToRoom.get(playerId);
     if (!roomId) return {};
@@ -497,7 +654,7 @@ export class RoomManager {
     if (!room) return {};
 
     const player = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId
+      (p) => (p.playerId || p.id) === playerId
     );
     const nickname = player?.nickname;
 
@@ -508,6 +665,9 @@ export class RoomManager {
     room.players = room.players.filter(
       (p) => (p.playerId || p.id) !== playerId
     );
+
+    // Clean up active Dots & Boxes game instance without triggering a game-over stage transition
+    this.activeGameEngines.delete(roomId);
 
     if (room.players.length === 0) {
       this.rooms.delete(roomId);
@@ -521,11 +681,6 @@ export class RoomManager {
     return { roomId, room, disconnectedNickname: nickname };
   }
 
-  /**
-   * Generates a PRIVACY-SAFE snapshot tailored for a specific client targetPlayerId.
-   * Player 1 sees ONLY Player 1's board.
-   * Player 2 sees ONLY Player 2's board.
-   */
   public getClientRoomState(roomId: string, targetPlayerId: string): ClientRoomState | null {
     const room = this.rooms.get(roomId);
     if (!room) return null;
@@ -554,9 +709,12 @@ export class RoomManager {
     const myWinningLineIndices = lines[targetPlayerId] || [];
     const myCompletedLines = completedCounts[targetPlayerId] || 0;
 
+    const dotsGame = this.getDotsGameInstance(roomId);
+
     return {
       roomId: room.roomId,
       stage: room.stage,
+      selectedGame: room.selectedGame,
       players: publicPlayers,
       myBoard,
       myPlayerId: targetPlayerId,
@@ -568,8 +726,10 @@ export class RoomManager {
       latestCalledNumber: room.calledNumbers[room.calledNumbers.length - 1] || null,
       winnerId: room.winnerId,
       myCompletedLines,
-      opponentCompletedLines: 0, // Opponent completed lines kept hidden for privacy
+      opponentCompletedLines: 0,
       myWinningLineIndices,
+      dotsState: dotsGame ? dotsGame.getDotsState() : undefined,
+      chatMessages: room.chatMessages || [],
     };
   }
 }

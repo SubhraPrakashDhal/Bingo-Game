@@ -4,9 +4,10 @@ import { WelcomeScreen } from './components/screens/WelcomeScreen';
 import { LobbyScreen } from './components/screens/LobbyScreen';
 import { SetupBoardScreen } from './components/screens/SetupBoardScreen';
 import { TossScreen } from './components/screens/TossScreen';
-import { GameScreen } from './components/screens/GameScreen';
+import { ActiveGameRenderer } from './games/GameRegistry';
+import { GameChat } from './components/shared/GameChat';
 import { PlayerLeftModal } from './components/screens/PlayerLeftModal';
-import { Wifi, WifiOff, LogOut, X } from 'lucide-react';
+import { Wifi, WifiOff, LogOut, X, Gamepad2 } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const { roomState, isConnected, isReconnecting, isRestoringSession, errorMessage, clearErrorMessage, endSession } = useBingoSocket();
@@ -16,7 +17,7 @@ const MainContent: React.FC = () => {
       if (isRestoringSession) {
         return (
           <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
-            <div className="glass-panel p-8 rounded-3xl border border-white/10 text-center max-w-md shadow-2xl">
+            <div className="glass-panel p-8 rounded-3xl border border-white/10 text-center max-w-md shadow-2xl bg-slate-950/80 backdrop-blur-xl">
               <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 animate-spin">
                 <Wifi className="w-6 h-6" />
               </div>
@@ -40,11 +41,22 @@ const MainContent: React.FC = () => {
         return <TossScreen />;
       case 'PLAYING':
       case 'GAME_OVER':
-        return <GameScreen />;
+      case 'DOTS_PLAYING':
+      case 'DOTS_ENDED':
+        return roomState.selectedGame ? (
+          <ActiveGameRenderer gameType={roomState.selectedGame} />
+        ) : (
+          <WelcomeScreen />
+        );
       default:
         return <WelcomeScreen />;
     }
   };
+
+  const isGameplayActive =
+    roomState &&
+    roomState.stage !== 'WELCOME' &&
+    roomState.stage !== 'LOBBY';
 
   return (
     <div className="min-h-screen flex flex-col justify-between">
@@ -53,10 +65,10 @@ const MainContent: React.FC = () => {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center font-black text-white text-sm shadow-md shadow-blue-500/20">
-              B
+              <Gamepad2 className="w-4 h-4 text-white" />
             </div>
             <span className="font-extrabold text-sm md:text-base tracking-tight text-white">
-              BINGO <span className="text-blue-400 font-normal">PRIVATE</span>
+              GAMES <span className="text-blue-400 font-normal">PRIVATE</span>
             </span>
           </div>
 
@@ -112,12 +124,15 @@ const MainContent: React.FC = () => {
       {/* Player Disconnected / Left Modal */}
       <PlayerLeftModal />
 
+      {/* Shared In-Game Glass Chat Overlay */}
+      {isGameplayActive && <GameChat />}
+
       {/* Main View Area */}
       <main className="flex-1">{renderCurrentScreen()}</main>
 
       {/* Footer */}
       <footer className="w-full border-t border-white/5 py-4 text-center text-slate-500 text-xs">
-        <span>Authoritative Private 2-Player Bingo • Real-time Socket.IO Sync</span>
+        <span>GAMES PRIVATE • Real-Time 2-Player Platform • Socket.IO Sync</span>
       </footer>
     </div>
   );

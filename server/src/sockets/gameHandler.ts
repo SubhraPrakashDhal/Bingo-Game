@@ -3,6 +3,7 @@ import {
   ClientToServerEvents,
   ServerToClientEvents,
   CoinChoice,
+  GameType,
 } from '../../../shared/types';
 import { RoomManager } from '../game/RoomManager';
 
@@ -82,7 +83,47 @@ export function registerGameHandlers(
     }
   });
 
-  // 3. Reconnect Room explicitly
+  // 3. Select Game (Host only, server-authoritative)
+  socket.on('room:select_game', ({ game }, callback) => {
+    const playerId = getPlayerId();
+    const result = roomManager.selectGame(playerId, game);
+    if (!result.success) {
+      if (typeof callback === 'function') callback({ success: false, error: result.error });
+      return;
+    }
+
+    if (result.room) {
+      io.to(result.room.roomId).emit('game_selection_updated', { selectedGame: game });
+      broadcastRoomUpdate(result.room.roomId);
+    }
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 4. Start Game (Host only, server-authoritative)
+  socket.on('room:start_game', (callback) => {
+    const playerId = getPlayerId();
+    const result = roomManager.startGame(playerId);
+    if (!result.success) {
+      if (typeof callback === 'function') callback({ success: false, error: result.error });
+      return;
+    }
+
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 5. Return to Common Lobby after game end
+  socket.on('room:return_to_lobby', () => {
+    const playerId = getPlayerId();
+    const result = roomManager.returnToLobby(playerId);
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+  });
+
+  // 6. Reconnect Room explicitly
   socket.on('room:reconnect', (payload, callback) => {
     const targetPlayerId = payload?.playerId || getPlayerId();
     const reconRes = roomManager.reconnectPlayer(targetPlayerId, socket.id);
@@ -99,7 +140,7 @@ export function registerGameHandlers(
     }
   });
 
-  // 4. Toggle Ready (Lobby)
+  // 7. Toggle Ready (Lobby)
   socket.on('room:toggle_ready', () => {
     const playerId = getPlayerId();
     const result = roomManager.toggleReady(playerId);
@@ -110,7 +151,7 @@ export function registerGameHandlers(
     }
   });
 
-  // 5. Submit Board (5x5 Setup)
+  // 8. Submit Board (5x5 Setup for Bingo)
   socket.on('board:submit', ({ board }, callback) => {
     const playerId = getPlayerId();
     const result = roomManager.submitBoard(playerId, board);
@@ -124,7 +165,6 @@ export function registerGameHandlers(
     if (result.room) {
       broadcastRoomUpdate(result.room.roomId);
 
-      // Auto-trigger Coin Toss if room just entered TOSS stage
       if (result.room.stage === 'TOSS') {
         const tossRes = roomManager.executeToss(playerId, 'HEADS');
         if (tossRes.room && tossRes.tossResult) {
@@ -135,7 +175,7 @@ export function registerGameHandlers(
     }
   });
 
-  // 6. Choose Toss
+  // 9. Choose Toss
   socket.on('toss:choose', ({ choice }: { choice: CoinChoice }) => {
     const playerId = getPlayerId();
     const tossRes = roomManager.executeToss(playerId, choice);
@@ -147,7 +187,7 @@ export function registerGameHandlers(
     }
   });
 
-  // 7. Call Number
+  // 10. Call Number (Bingo)
   socket.on('game:call_number', ({ number }, callback) => {
     const playerId = getPlayerId();
     const result = roomManager.callNumber(playerId, number);
@@ -159,7 +199,6 @@ export function registerGameHandlers(
     callback({ success: true });
 
     if (result.room) {
-      // Broadcast number:called popup payload to both clients
       io.to(result.room.roomId).emit('number:called', {
         number,
         calledByNickname: result.calledByNickname || 'Player',
@@ -168,7 +207,6 @@ export function registerGameHandlers(
 
       broadcastRoomUpdate(result.room.roomId);
 
-      // Check if someone won
       if (result.room.stage === 'GAME_OVER' && result.winner) {
         const winnerId = result.winner.playerId || result.winner.id;
         io.to(result.room.roomId).emit('game:bingo', {
@@ -179,25 +217,21 @@ export function registerGameHandlers(
     }
   });
 
-  // 8. Request Rematch
+  // 11. Request Rematch (Bingo)
   socket.on('game:rematch', () => {
     const playerId = getPlayerId();
-
     const result = roomManager.requestRematch(playerId);
 
     if (!result.room) return;
 
-    // Both players accepted rematch
     if (result.bothReadyForRematch) {
       broadcastRoomUpdate(result.room.roomId);
       return;
     }
 
-    // Only this player requested rematch
     const requestingPlayer = result.room.players.find(
       (p) => p.playerId === playerId
     );
-
     const opponent = result.room.players.find(
       (p) => p.playerId !== playerId
     );
@@ -207,10 +241,8 @@ export function registerGameHandlers(
       return;
     }
 
-    // First update opponent's room state
     broadcastRoomUpdate(result.room.roomId);
 
-    // Send direct notification to opponent
     if (opponent.id && opponent.isConnected !== false) {
       io.to(opponent.id).emit('rematch:requested', {
         nickname: requestingPlayer.nickname,
@@ -218,11 +250,64 @@ export function registerGameHandlers(
     }
   });
 
-  // 9. Explicit Leave Room
+  // 12. Dots & Boxes Line Move
+  socket.on('dots:move', ({ type, row, col }, callback) => {
+    const playerId = getPlayerId();
+    const result = roomManager.makeDotsMove(playerId, type, row, col);
+    if (!result.success) {
+      if (typeof callback === 'function') callback({ success: false, error: result.error });
+      return;
+    }
+
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 13. Dots & Boxes Rematch
+  socket.on('dots:rematch', () => {
+    const playerId = getPlayerId();
+    const result = roomManager.requestDotsRematch(playerId);
+
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+  });
+
+  // 14. Shared In-Game Chat Message
+  const handleChat = (rawMessage?: string, rawText?: string, callback?: (res: { success: boolean; error?: string }) => void) => {
+    const playerId = getPlayerId();
+    const text = rawMessage || rawText || '';
+    const result = roomManager.addChatMessage(playerId, text);
+
+    if (!result.success) {
+      if (typeof callback === 'function') callback({ success: false, error: result.error });
+      return;
+    }
+
+    if (result.room && result.message) {
+      io.to(result.room.roomId).emit('receive_game_chat_message', result.message);
+      io.to(result.room.roomId).emit('new_message', result.message);
+      broadcastRoomUpdate(result.room.roomId);
+    }
+    if (typeof callback === 'function') callback({ success: true });
+  };
+
+  socket.on('send_game_chat_message', ({ message, text }, callback) => {
+    handleChat(message, text, callback);
+  });
+
+  socket.on('send_message', ({ text }) => {
+    handleChat(undefined, text);
+  });
+
+  // 15. Explicit Leave Room
   socket.on('room:leave', () => {
     const playerId = getPlayerId();
     const result = roomManager.leaveRoom(playerId);
     if (result.roomId) {
+      socket.leave(result.roomId);
       if (result.disconnectedNickname) {
         socket.to(result.roomId).emit('player:disconnected', { nickname: result.disconnectedNickname });
       }
@@ -232,7 +317,7 @@ export function registerGameHandlers(
     }
   });
 
-  // 10. Socket Disconnect (Temporary or page refresh)
+  // 16. Socket Disconnect
   socket.on('disconnect', () => {
     const result = roomManager.handleDisconnect(socket.id);
     if (result.roomId && result.room) {

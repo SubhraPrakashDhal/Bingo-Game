@@ -16,6 +16,16 @@
     min-height: 100vh;
     font-family: 'Outfit', 'Inter', sans-serif;
   }
+
+  input, textarea, button, select {
+    outline: none;
+  }
+
+  input:focus, textarea:focus, button:focus, select:focus,
+  input:focus-visible, textarea:focus-visible, button:focus-visible, select:focus-visible {
+    outline: none !important;
+    box-shadow: none;
+  }
 }
 
 /* Glassmorphism Utility Classes */

@@ -6,9 +6,12 @@ import { UserX, LogOut, AlertTriangle } from 'lucide-react';
 export const PlayerLeftModal: React.FC = () => {
   const { roomState, playerLeftNotification, endSession, clearPlayerLeftNotification } = useBingoSocket();
 
-  // Determine if opponent has left during active game
-  const opponent = roomState?.players.find((p) => p.id !== roomState.myPlayerId);
-  const isGameActive = roomState && ['BOARD_SETUP', 'TOSS', 'PLAYING', 'GAME_OVER'].includes(roomState.stage);
+  // If client is not currently in a room, do not show modal
+  if (!roomState) return null;
+
+  // Determine if opponent has left during active game or room session
+  const opponent = roomState.players.find((p) => p.id !== roomState.myPlayerId);
+  const isGameActive = ['BOARD_SETUP', 'TOSS', 'PLAYING', 'GAME_OVER', 'DOTS_PLAYING', 'DOTS_ENDED'].includes(roomState.stage);
   const isOpponentMissing = isGameActive && (!opponent || roomState.players.length < 2);
 
   const shouldShow = playerLeftNotification !== null || isOpponentMissing;

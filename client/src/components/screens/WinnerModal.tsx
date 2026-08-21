@@ -11,15 +11,9 @@ import {
 } from 'lucide-react';
 
 export const WinnerModal: React.FC = () => {
-  const { roomState, requestRematch, leaveRoom, rematchNotification } = useBingoSocket();
+  const { roomState, requestRematch, returnToLobby, rematchNotification } = useBingoSocket();
 
   if (!roomState || roomState.stage !== 'GAME_OVER') return null;
-
-  const winner = roomState.players.find(
-    (p) => p.id === roomState.winnerId
-  );
-
-  const isIWinner = roomState.winnerId === roomState.myPlayerId || roomState.winnerId === roomState.mySocketId;
 
   const me = roomState.players.find(
     (p) => p.id === roomState.myPlayerId || p.id === roomState.mySocketId
@@ -28,6 +22,15 @@ export const WinnerModal: React.FC = () => {
   const opponent = roomState.players.find(
     (p) => p.id !== me?.id
   );
+
+  // If opponent left room, give priority to PlayerLeftModal
+  if (!opponent || roomState.players.length < 2) return null;
+
+  const winner = roomState.players.find(
+    (p) => p.id === roomState.winnerId
+  );
+
+  const isIWinner = roomState.winnerId === roomState.myPlayerId || roomState.winnerId === roomState.mySocketId;
 
   const requestingNickname =
     rematchNotification?.nickname ||
@@ -158,7 +161,7 @@ export const WinnerModal: React.FC = () => {
             <GlassButton
               type="button"
               variant="secondary"
-              onClick={leaveRoom}
+              onClick={returnToLobby}
               fullWidth
             >
               <LogOut className="w-4 h-4 text-slate-400" />
