@@ -288,6 +288,10 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
       socket.emit('room:start_game', (res) => {
+        if (res && !res.success && res.error) {
+          console.error('Start game failed on server:', res.error);
+          setErrorMessage(res.error);
+        }
         resolve(res || { success: true });
       });
     });

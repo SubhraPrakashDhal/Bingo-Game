@@ -30,6 +30,16 @@ export class RoomManager {
     return undefined;
   }
 
+  private findPlayerInRoom(room: RoomState, playerId: string): Player | undefined {
+    return room.players.find(
+      (p) =>
+        p.playerId === playerId ||
+        p.id === playerId ||
+        this.socketToPlayer.get(p.id) === playerId ||
+        (p.id && this.socketToPlayer.get(playerId) === p.playerId)
+    );
+  }
+
   /**
    * Generates a 6-character room code.
    */
@@ -154,9 +164,7 @@ export class RoomManager {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { success: false, error: 'Room not found' };
 
-    const player = room.players.find(
-      (p) => p.playerId === playerId || p.id === playerId || this.socketToPlayer.get(p.id) === playerId
-    );
+    const player = this.findPlayerInRoom(room, playerId);
     if (!player || !player.isHost) {
       return { success: false, error: 'Only the host can select a game.' };
     }
@@ -178,9 +186,7 @@ export class RoomManager {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { success: false, error: 'Room not found' };
 
-    const player = room.players.find(
-      (p) => (p.playerId || p.id) === playerId
-    );
+    const player = this.findPlayerInRoom(room, playerId);
     if (!player || !player.isHost) {
       return { success: false, error: 'Only the host can start the game.' };
     }
@@ -318,9 +324,7 @@ export class RoomManager {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { error: 'Room not found' };
 
-    const player = room.players.find(
-      (p) => (p.playerId || p.id) === playerId
-    );
+    const player = this.findPlayerInRoom(room, playerId);
     if (!player) return { error: 'Player not found' };
 
     player.isReady = !player.isReady;
@@ -355,9 +359,7 @@ export class RoomManager {
 
     room.boards[playerId] = board;
 
-    const player = room.players.find(
-      (p) => (p.playerId || p.id) === playerId
-    );
+    const player = this.findPlayerInRoom(room, playerId);
     if (player) {
       player.isBoardReady = true;
     }
@@ -436,9 +438,7 @@ export class RoomManager {
 
     room.calledNumbers.push(numberCalled);
 
-    const caller = room.players.find(
-      (p) => (p.playerId || p.id) === playerId
-    );
+    const caller = this.findPlayerInRoom(room, playerId);
 
     const winningPlayers: Player[] = [];
     if (!room.completedLineCounts) room.completedLineCounts = {};
@@ -498,9 +498,7 @@ export class RoomManager {
     const room = this.getRoomByPlayerId(playerId);
     if (!room) return { bothReadyForRematch: false };
 
-    const player = room.players.find(
-      (p) => (p.playerId || p.id) === playerId
-    );
+    const player = this.findPlayerInRoom(room, playerId);
     if (player) {
       player.wantsRematch = true;
     }
