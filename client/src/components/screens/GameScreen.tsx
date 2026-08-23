@@ -42,7 +42,6 @@ export const GameScreen: React.FC = () => {
               </div>
               <div className="text-left">
                 <span className="block text-xs font-bold text-white leading-none">{me?.nickname} (You)</span>
-                <span className="text-[10px] text-slate-400 font-mono">Lines: {roomState.myCompletedLines} / 5</span>
               </div>
             </div>
 
@@ -55,7 +54,6 @@ export const GameScreen: React.FC = () => {
               </div>
               <div className="text-left">
                 <span className="block text-xs font-bold text-white leading-none">{opponent?.nickname || 'Opponent'}</span>
-                <span className="text-[10px] text-slate-400 font-mono">Lines: {roomState.opponentCompletedLines} / 5</span>
               </div>
             </div>
           </div>

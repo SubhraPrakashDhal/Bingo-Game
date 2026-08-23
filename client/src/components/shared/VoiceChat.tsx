@@ -4,6 +4,15 @@ import { Mic, MicOff, Volume2, VolumeX, AlertCircle, Loader2 } from 'lucide-reac
 
 type VoiceConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'mic_denied' | 'error';
 
+const MAX_RECONNECT_ATTEMPTS = 3;
+const isDebug = import.meta.env.VITE_VOICE_DEBUG === 'true' || import.meta.env.DEV;
+
+const voiceLog = (msg: string, ...args: any[]) => {
+  if (isDebug) {
+    console.log(`[VOICE] ${msg}`, ...args);
+  }
+};
+
 const getIceServers = (): RTCIceServer[] => {
   const servers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -16,12 +25,16 @@ const getIceServers = (): RTCIceServer[] => {
   const turnUsername = import.meta.env.VITE_TURN_USERNAME;
   const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
 
-  if (turnUrl && turnUsername && turnCredential) {
+  if (turnUrl) {
+    const urls = turnUrl.split(',').map((u: string) => u.trim());
     servers.push({
-      urls: turnUrl,
-      username: turnUsername,
-      credential: turnCredential,
+      urls,
+      username: turnUsername || '',
+      credential: turnCredential || '',
     });
+    voiceLog('Configured production TURN server:', urls);
+  } else {
+    voiceLog('No VITE_TURN_URL configured; relying on STUN/direct P2P.');
   }
 
   return servers;
@@ -42,6 +55,14 @@ export const VoiceChat: React.FC = () => {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const targetSocketIdRef = useRef<string | null>(null);
   const isNegotiatingRef = useRef<boolean>(false);
+  const reconnectAttemptRef = useRef<number>(0);
+  const iceRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const currentVoiceSessionKeyRef = useRef<string>('');
+  const roomIdRef = useRef<string>('');
+  const opponentSocketIdRef = useRef<string>('');
+  const isInitiatorRef = useRef<boolean>(false);
 
   // Keep ref synchronized with isListenOn state to prevent stale closure issues in ontrack
   useEffect(() => {
@@ -54,8 +75,35 @@ export const VoiceChat: React.FC = () => {
     (p) => (p.id !== playerId && p.id !== roomState?.mySocketId) && p.isConnected
   );
 
+  // Extract stable primitive identities for voice session isolation
+  const roomId = roomState?.roomId ?? '';
+  const myPlayerId = playerId || roomState?.myPlayerId || '';
+  const opponentSocketId = opponent?.id ?? '';
+  const isInitiator = myPlayerId && opponentSocketId ? myPlayerId.localeCompare(opponentSocketId) < 0 : false;
+
+  // Keep live refs updated for WebRTC callbacks without causing effect re-runs
+  useEffect(() => {
+    roomIdRef.current = roomId;
+    opponentSocketIdRef.current = opponentSocketId;
+    isInitiatorRef.current = isInitiator;
+  }, [roomId, opponentSocketId, isInitiator]);
+
+  // Clear pending recovery timers
+  const clearTimers = useCallback(() => {
+    if (iceRestartTimerRef.current) {
+      clearTimeout(iceRestartTimerRef.current);
+      iceRestartTimerRef.current = null;
+    }
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
   // Stop local media stream & close WebRTC peer connection cleanly
   const cleanupWebRTC = useCallback(() => {
+    clearTimers();
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
         try {
@@ -70,6 +118,7 @@ export const VoiceChat: React.FC = () => {
       pc.onicecandidate = null;
       pc.ontrack = null;
       pc.onconnectionstatechange = null;
+      pc.oniceconnectionstatechange = null;
       pc.onnegotiationneeded = null;
       try {
         pc.close();
@@ -84,8 +133,41 @@ export const VoiceChat: React.FC = () => {
     pendingCandidatesRef.current = [];
     targetSocketIdRef.current = null;
     isNegotiatingRef.current = false;
+    reconnectAttemptRef.current = 0;
+    currentVoiceSessionKeyRef.current = '';
     setStatus('disconnected');
     setStatusMessage(null);
+  }, [clearTimers]);
+
+  // Inspect selected candidate pair stats (host, srflx, or relay)
+  const inspectCandidatePair = useCallback(async (pc: RTCPeerConnection) => {
+    try {
+      const stats = await pc.getStats();
+      let selectedPair: any = null;
+      let localCandidate: any = null;
+      let remoteCandidate: any = null;
+
+      stats.forEach((report) => {
+        if (report.type === 'transport' && report.selectedCandidatePairId) {
+          selectedPair = stats.get(report.selectedCandidatePairId);
+        } else if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+          selectedPair = report;
+        }
+      });
+
+      if (selectedPair) {
+        localCandidate = stats.get(selectedPair.localCandidateId);
+        remoteCandidate = stats.get(selectedPair.remoteCandidateId);
+        voiceLog('Selected candidate pair info:', {
+          localType: localCandidate?.candidateType || 'unknown',
+          remoteType: remoteCandidate?.candidateType || 'unknown',
+          localProtocol: localCandidate?.protocol,
+          remoteProtocol: remoteCandidate?.protocol,
+        });
+      }
+    } catch (e) {
+      voiceLog('Stats inspection error:', e);
+    }
   }, []);
 
   // Helper to add or replace audio track on active RTCPeerConnection
@@ -98,7 +180,7 @@ export const VoiceChat: React.FC = () => {
 
     if (existingSender) {
       existingSender.replaceTrack(audioTrack).catch((err) => {
-        console.warn('[VOICE] replaceTrack failed, adding track:', err);
+        voiceLog('replaceTrack failed, adding track:', err);
         try {
           pc.addTrack(audioTrack, stream);
         } catch (e) {}
@@ -110,8 +192,62 @@ export const VoiceChat: React.FC = () => {
     }
   }, []);
 
+  // Trigger ICE restart offer to recover from temporary network drops
+  const triggerIceRestart = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || pc.signalingState !== 'stable' || !isInitiatorRef.current) return;
+    voiceLog('Initiating ICE restart offer...');
+    try {
+      isNegotiatingRef.current = true;
+      const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true });
+      await pc.setLocalDescription(offer);
+      if (socket && targetSocketIdRef.current) {
+        socket.emit('voice:offer', {
+          targetSocketId: targetSocketIdRef.current,
+          offer,
+        });
+      }
+    } catch (err) {
+      voiceLog('ICE restart error:', err);
+    } finally {
+      isNegotiatingRef.current = false;
+    }
+  }, [socket]);
+
+  // Handle hard WebRTC connection failure by establishing fresh connection
+  const handleHardFailure = useCallback(() => {
+    if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      voiceLog('Max reconnect attempts reached');
+      setStatus('error');
+      setStatusMessage('Voice Disconnected');
+      return;
+    }
+
+    reconnectAttemptRef.current += 1;
+    voiceLog(`Retrying WebRTC connection (Attempt ${reconnectAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
+    setStatus('connecting');
+    setStatusMessage('Reconnecting Voice...');
+
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    reconnectTimerRef.current = setTimeout(() => {
+      if (targetSocketIdRef.current && socket && roomIdRef.current) {
+        socket.emit('voice:ready', { roomId: roomIdRef.current });
+      }
+    }, 1500);
+  }, [socket]);
+
   // Create & configure RTCPeerConnection instance for P2P audio streaming
   const createPeerConnection = useCallback((targetSocketId: string): RTCPeerConnection => {
+    if (
+      peerConnectionRef.current &&
+      targetSocketIdRef.current === targetSocketId &&
+      peerConnectionRef.current.signalingState !== 'closed'
+    ) {
+      voiceLog('Reusing existing peer connection for target:', targetSocketId);
+      return peerConnectionRef.current;
+    }
+
+    voiceLog('Creating new peer connection for target:', targetSocketId);
     if (peerConnectionRef.current) {
       try {
         peerConnectionRef.current.close();
@@ -126,7 +262,7 @@ export const VoiceChat: React.FC = () => {
     try {
       pc.addTransceiver('audio', { direction: 'sendrecv' });
     } catch (e) {
-      console.warn('[VOICE] addTransceiver note:', e);
+      voiceLog('addTransceiver note:', e);
     }
 
     // Send local ICE candidates through Socket.IO signaling
@@ -141,7 +277,7 @@ export const VoiceChat: React.FC = () => {
 
     // Attach remote WebRTC audio stream to HTML audio element
     pc.ontrack = (event) => {
-      console.log('[VOICE] Remote track received:', {
+      voiceLog('Remote track received:', {
         kind: event.track.kind,
         enabled: event.track.enabled,
         muted: event.track.muted,
@@ -161,29 +297,60 @@ export const VoiceChat: React.FC = () => {
       audio.play().then(() => {
         setStatus('connected');
         setStatusMessage('Voice Connected');
+        reconnectAttemptRef.current = 0;
       }).catch((err) => {
-        console.warn('[VOICE] Remote audio play blocked by browser policy:', err);
+        voiceLog('Remote audio play blocked by browser policy:', err);
         setStatus('connected');
         setStatusMessage('Tap Listen to enable audio');
       });
     };
 
-    // Connection state monitor & sender/receiver logging
+    // Monitor Connection State
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
+      voiceLog(`Connection state changed: ${state}`);
+
       if (state === 'connected') {
-        console.log('[VOICE] Connection state connected:', {
-          senders: pc.getSenders().map((s) => ({ kind: s.track?.kind, enabled: s.track?.enabled })),
-          receivers: pc.getReceivers().map((r) => ({ kind: r.track?.kind, enabled: r.track?.enabled, readyState: r.track?.readyState })),
-        });
         setStatus('connected');
         setStatusMessage('Voice Connected');
+        reconnectAttemptRef.current = 0;
+        inspectCandidatePair(pc);
       } else if (state === 'connecting') {
         setStatus('connecting');
         setStatusMessage('Connecting Voice...');
-      } else if (state === 'failed' || state === 'disconnected') {
+      } else if (state === 'disconnected') {
+        setStatus('connecting');
+        setStatusMessage('Reconnecting Voice...');
+      } else if (state === 'failed') {
+        handleHardFailure();
+      } else if (state === 'closed') {
         setStatus('disconnected');
         setStatusMessage('Voice Disconnected');
+      }
+    };
+
+    // Monitor ICE Connection State
+    pc.oniceconnectionstatechange = () => {
+      const iceState = pc.iceConnectionState;
+      voiceLog(`ICE connection state changed: ${iceState}`);
+
+      if (iceState === 'connected' || iceState === 'completed') {
+        setStatus('connected');
+        setStatusMessage('Voice Connected');
+        reconnectAttemptRef.current = 0;
+        inspectCandidatePair(pc);
+      } else if (iceState === 'disconnected') {
+        setStatus('connecting');
+        setStatusMessage('Reconnecting Voice...');
+
+        if (iceRestartTimerRef.current) clearTimeout(iceRestartTimerRef.current);
+        iceRestartTimerRef.current = setTimeout(() => {
+          if (peerConnectionRef.current && peerConnectionRef.current.iceConnectionState === 'disconnected') {
+            triggerIceRestart();
+          }
+        }, 3000);
+      } else if (iceState === 'failed') {
+        handleHardFailure();
       }
     };
 
@@ -201,7 +368,7 @@ export const VoiceChat: React.FC = () => {
           });
         }
       } catch (err) {
-        console.error('[VOICE] Renegotiation offer error:', err);
+        voiceLog('Renegotiation offer error:', err);
       } finally {
         isNegotiatingRef.current = false;
       }
@@ -213,7 +380,7 @@ export const VoiceChat: React.FC = () => {
     }
 
     return pc;
-  }, [socket, attachTracksToPeerConnection]);
+  }, [socket, attachTracksToPeerConnection, inspectCandidatePair, triggerIceRestart, handleHardFailure]);
 
   // Drain queued ICE candidates received before remote description set
   const drainPendingCandidates = async (pc: RTCPeerConnection) => {
@@ -223,28 +390,67 @@ export const VoiceChat: React.FC = () => {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (e) {
-          console.warn('[VOICE] Pending ICE candidate error:', e);
+          voiceLog('Pending ICE candidate error:', e);
         }
       }
     }
   };
 
-  // Deterministic initiator check: compare stable IDs to designate a single offerer
-  const myId = playerId || roomState?.myPlayerId || '';
-  const opponentId = opponent?.id || '';
-  const isInitiator = myId && opponentId ? myId.localeCompare(opponentId) < 0 : false;
+  // Voice Session Initialization Effect: Dependent ONLY on stable session key
+  const voiceSessionKey = socket?.id && roomId && opponentSocketId
+    ? `${socket.id}:${roomId}:${opponentSocketId}`
+    : '';
 
-  // Socket.IO signaling event listener registration
   useEffect(() => {
-    if (!socket || !isInRoom) return;
+    if (!socket || !isInRoom || !voiceSessionKey) {
+      if (currentVoiceSessionKeyRef.current) {
+        voiceLog('Leaving voice session...');
+        cleanupWebRTC();
+      }
+      return;
+    }
+
+    // GUARD: If session key hasn't changed (normal game updates like Bingo numbers, chat, toss), DO NOTHING!
+    if (currentVoiceSessionKeyRef.current === voiceSessionKey) {
+      voiceLog('Room state updated — voice session unchanged:', voiceSessionKey);
+      return;
+    }
+
+    voiceLog('New voice session initialized:', voiceSessionKey);
+    currentVoiceSessionKeyRef.current = voiceSessionKey;
+
+    // Send voice:ready signal once for this new session
+    if (opponentSocketId) {
+      voiceLog('Sending voice:ready signal for session key:', voiceSessionKey);
+      socket.emit('voice:ready', { roomId });
+    }
+  }, [socket, isInRoom, voiceSessionKey, roomId, opponentSocketId, cleanupWebRTC]);
+
+  // Socket.IO signaling event listener registration (Stable, independent lifecycle)
+  useEffect(() => {
+    if (!socket) return;
 
     const handleVoiceReady = async ({ senderSocketId }: { senderSocketId: string }) => {
       if (!senderSocketId || senderSocketId === socket.id) return;
 
+      // If active peer connection already exists for this target, reuse it!
+      if (
+        peerConnectionRef.current &&
+        targetSocketIdRef.current === senderSocketId &&
+        peerConnectionRef.current.signalingState !== 'closed'
+      ) {
+        voiceLog('Reusing existing active peer connection for voice:ready');
+        return;
+      }
+
       // Only designated initiator creates the initial offer (prevents glare collisions)
-      if (!isInitiator) return;
+      if (!isInitiatorRef.current) {
+        voiceLog('Non-initiator received voice:ready, waiting for voice:offer');
+        return;
+      }
 
       try {
+        voiceLog('Creating peer connection for voice:ready (Initiator)');
         setStatus('connecting');
         setStatusMessage('Connecting Voice...');
         const pc = createPeerConnection(senderSocketId);
@@ -253,7 +459,7 @@ export const VoiceChat: React.FC = () => {
         await pc.setLocalDescription(offer);
         socket.emit('voice:offer', { targetSocketId: senderSocketId, offer });
       } catch (err) {
-        console.error('[VOICE] Error creating initial offer:', err);
+        voiceLog('Error creating initial offer:', err);
       } finally {
         isNegotiatingRef.current = false;
       }
@@ -262,6 +468,7 @@ export const VoiceChat: React.FC = () => {
     const handleVoiceOffer = async ({ senderSocketId, offer }: { senderSocketId: string; offer: RTCSessionDescriptionInit }) => {
       if (!senderSocketId || senderSocketId === socket.id) return;
       try {
+        voiceLog('Handling incoming voice:offer from:', senderSocketId);
         setStatus('connecting');
         setStatusMessage('Connecting Voice...');
         const pc = peerConnectionRef.current || createPeerConnection(senderSocketId);
@@ -273,20 +480,21 @@ export const VoiceChat: React.FC = () => {
         await pc.setLocalDescription(answer);
         socket.emit('voice:answer', { targetSocketId: senderSocketId, answer });
       } catch (err) {
-        console.error('[VOICE] Error handling offer:', err);
+        voiceLog('Error handling offer:', err);
       }
     };
 
     const handleVoiceAnswer = async ({ senderSocketId, answer }: { senderSocketId: string; answer: RTCSessionDescriptionInit }) => {
       if (!senderSocketId || senderSocketId === socket.id) return;
       try {
+        voiceLog('Handling incoming voice:answer from:', senderSocketId);
         const pc = peerConnectionRef.current;
         if (pc && pc.signalingState !== 'closed') {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           await drainPendingCandidates(pc);
         }
       } catch (err) {
-        console.error('[VOICE] Error handling answer:', err);
+        voiceLog('Error handling answer:', err);
       }
     };
 
@@ -300,12 +508,13 @@ export const VoiceChat: React.FC = () => {
           pendingCandidatesRef.current.push(candidate);
         }
       } catch (err) {
-        console.warn('[VOICE] Error adding candidate:', err);
+        voiceLog('Error adding candidate:', err);
       }
     };
 
     const handleVoiceLeave = ({ senderSocketId }: { senderSocketId: string }) => {
       if (senderSocketId && senderSocketId === targetSocketIdRef.current) {
+        voiceLog('Opponent sent voice:leave, resetting remote stream');
         if (remoteAudioRef.current) {
           remoteAudioRef.current.srcObject = null;
         }
@@ -320,11 +529,6 @@ export const VoiceChat: React.FC = () => {
     socket.on('voice:candidate', handleVoiceCandidate);
     socket.on('voice:leave', handleVoiceLeave);
 
-    // Announce voice ready to opponent upon joining or reconnecting
-    if (opponent && roomState?.roomId) {
-      socket.emit('voice:ready', { roomId: roomState.roomId });
-    }
-
     return () => {
       socket.off('voice:ready', handleVoiceReady);
       socket.off('voice:offer', handleVoiceOffer);
@@ -332,7 +536,7 @@ export const VoiceChat: React.FC = () => {
       socket.off('voice:candidate', handleVoiceCandidate);
       socket.off('voice:leave', handleVoiceLeave);
     };
-  }, [socket, isInRoom, roomState?.roomId, opponent, isInitiator, createPeerConnection]);
+  }, [socket, createPeerConnection]);
 
   // Clean up WebRTC session when player leaves room completely
   useEffect(() => {
@@ -347,7 +551,7 @@ export const VoiceChat: React.FC = () => {
     if (!isMicOn) {
       // 1. Explicit Secure Context check (Browsers require HTTPS for getUserMedia except on localhost)
       if (!window.isSecureContext) {
-        console.warn('[VOICE] Insecure context: getUserMedia requires HTTPS or localhost');
+        voiceLog('Insecure context: getUserMedia requires HTTPS or localhost');
         setStatus('mic_denied');
         setStatusMessage('Microphone requires HTTPS');
         setIsMicOn(false);
@@ -356,7 +560,7 @@ export const VoiceChat: React.FC = () => {
 
       // 2. Explicit navigator.mediaDevices availability check
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.warn('[VOICE] mediaDevices API not available in browser');
+        voiceLog('mediaDevices API not available in browser');
         setStatus('mic_denied');
         setStatusMessage('Mic unsupported in browser');
         setIsMicOn(false);
@@ -389,7 +593,7 @@ export const VoiceChat: React.FC = () => {
                 offer,
               });
             } catch (err) {
-              console.error('[VOICE] Error creating mic enable offer:', err);
+              voiceLog('Error creating mic enable offer:', err);
             } finally {
               isNegotiatingRef.current = false;
             }
@@ -399,7 +603,7 @@ export const VoiceChat: React.FC = () => {
         setIsMicOn(true);
         setStatusMessage('Microphone Active');
       } catch (err: any) {
-        console.error('[VOICE] Microphone access error:', err);
+        voiceLog('Microphone access error:', err);
         setStatus('mic_denied');
         setIsMicOn(false);
 
@@ -443,7 +647,7 @@ export const VoiceChat: React.FC = () => {
         await audio.play();
         setStatusMessage('Voice Unmuted');
       } catch (error) {
-        console.warn('[VOICE] Remote audio playback blocked:', error);
+        voiceLog('Remote audio playback blocked:', error);
         setStatusMessage('Tap Listen again to enable audio');
       }
     } else {
@@ -476,7 +680,7 @@ export const VoiceChat: React.FC = () => {
               <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
             ) : status === 'connecting' ? (
               <Loader2 className="h-2.5 w-2.5 text-amber-400 animate-spin" />
-            ) : status === 'mic_denied' ? (
+            ) : status === 'mic_denied' || status === 'error' ? (
               <AlertCircle className="h-2.5 w-2.5 text-rose-400" />
             ) : null}
           </div>
@@ -526,7 +730,7 @@ export const VoiceChat: React.FC = () => {
         {/* Status Badge / Toast (Visible on Mobile & Desktop) */}
         {statusMessage && (
           <div className={`mt-2 px-3 py-1 rounded-xl text-[11px] font-semibold border backdrop-blur-md shadow-lg transition-all duration-200 ${
-            status === 'mic_denied'
+            status === 'mic_denied' || status === 'error'
               ? 'bg-rose-950/80 border-rose-500/40 text-rose-300'
               : status === 'connected'
               ? 'bg-slate-950/80 border-emerald-500/30 text-emerald-300'

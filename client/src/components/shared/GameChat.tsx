@@ -259,7 +259,7 @@ export const GameChat: React.FC = () => {
               <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-sky-300 drop-shadow-md transition-transform duration-200 group-hover:scale-110" />
             </button>
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-black text-slate-950 shadow-md border-2 border-slate-950 animate-pulse pointer-events-none">
+              <span className="absolute -top-1 -right-1 z-20 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-sky-400 px-1.5 text-[10px] font-black text-slate-950 shadow-[0_0_12px_rgba(56,189,248,0.9)] border-2 border-slate-950 animate-bounce pointer-events-none">
                 {unreadCount}
               </span>
             )}
