@@ -114,7 +114,7 @@ export const SetupBoardScreen: React.FC = () => {
   const placedCount = nextNumber - 1;
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center px-3 py-5 md:px-5 md:py-6">
+    <div className="flex-1 min-h-[calc(100vh-57px)] flex flex-col items-center justify-center px-3 py-5 md:px-5 md:py-8 w-full">
       <GlassCard className="w-full max-w-xl text-center p-4 sm:p-5 md:p-6">
         {/* =====================================================
             HEADER

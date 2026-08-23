@@ -23,7 +23,7 @@ export const GameScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[90vh] flex flex-col items-center justify-between p-3 md:p-6 max-w-6xl mx-auto relative">
+    <div className="flex-1 min-h-[calc(100vh-57px)] flex flex-col items-center justify-between p-3 md:p-6 max-w-6xl mx-auto w-full relative">
       {/* 2-Second Call Popup */}
       <CalledPopup notification={calledNotification} mySocketId={roomState.mySocketId} />
 
@@ -55,7 +55,7 @@ export const GameScreen: React.FC = () => {
               </div>
               <div className="text-left">
                 <span className="block text-xs font-bold text-white leading-none">{opponent?.nickname || 'Opponent'}</span>
-                <span className="text-[10px] text-slate-400 font-mono">Opponent</span>
+                <span className="text-[10px] text-slate-400 font-mono">Lines: {roomState.opponentCompletedLines} / 5</span>
               </div>
             </div>
           </div>

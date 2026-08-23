@@ -518,6 +518,8 @@ export class RoomManager {
         (p) => (p.playerId || p.id) === callerId
       );
 
+      // If caller reached 5+ lines on their turn, caller ALWAYS wins priority.
+      // Otherwise, the non-caller who reached 5+ lines wins.
       if (callerWon) {
         winningPlayer = caller || winningPlayers[0];
       } else {
@@ -775,6 +777,12 @@ export class RoomManager {
     const myWinningLineIndices = lines[targetPlayerId] || [];
     const myCompletedLines = completedCounts[targetPlayerId] || 0;
 
+    const opponentPlayer = room.players.find(
+      (p) => (p.playerId || p.id) !== targetPlayerId
+    );
+    const opponentPlayerId = opponentPlayer ? (opponentPlayer.playerId || opponentPlayer.id) : '';
+    const opponentCompletedLines = completedCounts[opponentPlayerId] || 0;
+
     const dotsGame = this.getDotsGameInstance(roomId);
 
     return {
@@ -793,7 +801,7 @@ export class RoomManager {
       latestCalledNumber: room.calledNumbers[room.calledNumbers.length - 1] || null,
       winnerId: room.winnerId,
       myCompletedLines,
-      opponentCompletedLines: 0,
+      opponentCompletedLines,
       myWinningLineIndices,
       dotsState: dotsGame ? dotsGame.getDotsState() : undefined,
       chatMessages: room.chatMessages || [],

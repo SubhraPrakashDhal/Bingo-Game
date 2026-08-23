@@ -249,19 +249,21 @@ export const GameChat: React.FC = () => {
 
         {/* Circular Floating Chat Button */}
         {!isOpen && (
-          <button
-            type="button"
-            onClick={handleToggleChat}
-            className="group relative w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-full border border-white/20 bg-slate-900/60 backdrop-blur-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_15px_35px_rgba(56,189,248,0.25)] hover:border-white/35 hover:scale-105 active:scale-95 flex items-center justify-center transition-all duration-200 cursor-pointer overflow-hidden shrink-0"
-            aria-label="Open in-game chat"
-          >
-            <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-sky-300 drop-shadow-md transition-transform duration-200 group-hover:scale-110" />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={handleToggleChat}
+              className="group w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-full border border-white/20 bg-slate-900/60 backdrop-blur-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_15px_35px_rgba(56,189,248,0.25)] hover:border-white/35 hover:scale-105 active:scale-95 flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0"
+              aria-label="Open in-game chat"
+            >
+              <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-sky-300 drop-shadow-md transition-transform duration-200 group-hover:scale-110" />
+            </button>
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-black text-slate-950 shadow-md border border-slate-950 animate-pulse">
+              <span className="absolute -top-1 -right-1 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-black text-slate-950 shadow-md border-2 border-slate-950 animate-pulse pointer-events-none">
                 {unreadCount}
               </span>
             )}
-          </button>
+          </div>
         )}
       </div>
     </div>

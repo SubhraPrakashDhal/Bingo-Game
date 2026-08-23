@@ -152,6 +152,13 @@ export interface ClientToServerEvents {
   'send_game_chat_message': (payload: { roomId?: string; message?: string; text?: string }, callback?: (res: { success: boolean; error?: string }) => void) => void;
   'send_message': (payload: { roomId: string; text: string }) => void;
   'room:leave': () => void;
+
+  // WebRTC Voice Signaling Events (Client -> Server)
+  'voice:ready': (payload: { roomId: string }) => void;
+  'voice:offer': (payload: { targetSocketId: string; offer: RTCSessionDescriptionInit }) => void;
+  'voice:answer': (payload: { targetSocketId: string; answer: RTCSessionDescriptionInit }) => void;
+  'voice:candidate': (payload: { targetSocketId: string; candidate: RTCIceCandidateInit }) => void;
+  'voice:leave': (payload: { roomId: string }) => void;
 }
 
 // SOCKET EVENTS (Server -> Client)
@@ -167,5 +174,12 @@ export interface ServerToClientEvents {
   'error:message': (payload: { message: string }) => void;
   'player:disconnected': (payload: { nickname: string }) => void;
   'player:reconnected': (payload: { nickname: string }) => void;
+
+  // WebRTC Voice Signaling Events (Server -> Client)
+  'voice:ready': (payload: { senderSocketId: string; senderPlayerId: string }) => void;
+  'voice:offer': (payload: { senderSocketId: string; offer: RTCSessionDescriptionInit }) => void;
+  'voice:answer': (payload: { senderSocketId: string; answer: RTCSessionDescriptionInit }) => void;
+  'voice:candidate': (payload: { senderSocketId: string; candidate: RTCIceCandidateInit }) => void;
+  'voice:leave': (payload: { senderSocketId: string }) => void;
 }
 

@@ -68,7 +68,7 @@ export const LobbyScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 max-w-xl mx-auto">
+    <div className="flex-1 min-h-[calc(100vh-57px)] flex flex-col items-center justify-center p-4 py-8 max-w-xl mx-auto w-full">
       <GlassCard className="w-full text-center">
         {/* Header */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-4">
