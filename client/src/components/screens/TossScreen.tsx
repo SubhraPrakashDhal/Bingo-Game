@@ -69,7 +69,7 @@ export const TossScreen: React.FC = () => {
   const edgeLayers = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 max-w-lg mx-auto">
+    <div className="flex-1 min-h-[calc(100vh-57px)] flex flex-col items-center justify-center p-4 py-8 max-w-lg mx-auto w-full">
       <GlassCard className="w-full text-center py-8 px-5 sm:px-8 relative overflow-hidden shadow-2xl">
         {/* Header Badge */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold mb-5">

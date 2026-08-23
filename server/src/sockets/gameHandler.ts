@@ -368,6 +368,7 @@ export function registerGameHandlers(
     const result = roomManager.leaveRoom(playerId);
     if (result.roomId) {
       socket.leave(result.roomId);
+      socket.to(result.roomId).emit('voice:leave', { senderSocketId: socket.id });
       if (result.disconnectedNickname) {
         socket.to(result.roomId).emit('player:disconnected', { nickname: result.disconnectedNickname });
       }
@@ -381,7 +382,73 @@ export function registerGameHandlers(
   socket.on('disconnect', () => {
     const result = roomManager.handleDisconnect(socket.id);
     if (result.roomId && result.room) {
+      socket.to(result.roomId).emit('voice:leave', { senderSocketId: socket.id });
       broadcastRoomUpdate(result.roomId);
     }
+  });
+
+  // 17. WebRTC Real-Time Voice Chat Signaling (Strict Room & Opponent Security)
+  const getVerifiedPlayerRoom = (targetRoomId?: string) => {
+    const playerId = getPlayerId();
+    const room = roomManager.getRoomByPlayerId(playerId);
+    if (!room) return null;
+    if (targetRoomId && room.roomId.toUpperCase().trim() !== targetRoomId.toUpperCase().trim()) return null;
+    const playerInRoom = room.players.find((p) => (p.playerId || p.id) === playerId || p.id === socket.id);
+    if (!playerInRoom) return null;
+    return room;
+  };
+
+  socket.on('voice:ready', ({ roomId }) => {
+    const room = getVerifiedPlayerRoom(roomId);
+    if (!room) return;
+    const opponent = room.players.find((p) => p.id && p.id !== socket.id);
+    if (!opponent || !opponent.id) return;
+    io.to(opponent.id).emit('voice:ready', {
+      senderSocketId: socket.id,
+      senderPlayerId: getPlayerId(),
+    });
+  });
+
+  socket.on('voice:offer', ({ targetSocketId, offer }) => {
+    const room = getVerifiedPlayerRoom();
+    if (!room) return;
+    const targetPlayer = room.players.find((p) => p.id === targetSocketId && p.id !== socket.id);
+    if (!targetPlayer || !targetPlayer.id) return;
+    io.to(targetPlayer.id).emit('voice:offer', {
+      senderSocketId: socket.id,
+      offer,
+    });
+  });
+
+  socket.on('voice:answer', ({ targetSocketId, answer }) => {
+    const room = getVerifiedPlayerRoom();
+    if (!room) return;
+    const targetPlayer = room.players.find((p) => p.id === targetSocketId && p.id !== socket.id);
+    if (!targetPlayer || !targetPlayer.id) return;
+    io.to(targetPlayer.id).emit('voice:answer', {
+      senderSocketId: socket.id,
+      answer,
+    });
+  });
+
+  socket.on('voice:candidate', ({ targetSocketId, candidate }) => {
+    const room = getVerifiedPlayerRoom();
+    if (!room) return;
+    const targetPlayer = room.players.find((p) => p.id === targetSocketId && p.id !== socket.id);
+    if (!targetPlayer || !targetPlayer.id) return;
+    io.to(targetPlayer.id).emit('voice:candidate', {
+      senderSocketId: socket.id,
+      candidate,
+    });
+  });
+
+  socket.on('voice:leave', ({ roomId }) => {
+    const room = getVerifiedPlayerRoom(roomId);
+    if (!room) return;
+    const opponent = room.players.find((p) => p.id && p.id !== socket.id);
+    if (!opponent || !opponent.id) return;
+    io.to(opponent.id).emit('voice:leave', {
+      senderSocketId: socket.id,
+    });
   });
 }

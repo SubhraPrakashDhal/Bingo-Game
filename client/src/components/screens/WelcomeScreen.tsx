@@ -47,7 +47,7 @@ export const WelcomeScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center p-4">
+    <div className="flex-1 min-h-[calc(100vh-57px)] flex flex-col items-center justify-center p-4 py-8 md:py-12">
       {/* Brand Hero */}
       <div className="text-center mb-8 max-w-lg">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-4">
