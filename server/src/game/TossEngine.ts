@@ -6,12 +6,12 @@ export class TossEngine {
   }
 
   public static determineWinner(
-    hostChoice: CoinChoice,
-    hostId: string,
-    guestId: string
+    chooserChoice: CoinChoice,
+    chooserId: string,
+    otherPlayerId: string
   ): { outcome: CoinChoice; winnerId: string } {
     const outcome = this.flipCoin();
-    const winnerId = hostChoice === outcome ? hostId : guestId;
+    const winnerId = chooserChoice === outcome ? chooserId : otherPlayerId;
     return { outcome, winnerId };
   }
 }

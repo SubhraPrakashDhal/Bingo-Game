@@ -22,7 +22,12 @@ export function registerGameHandlers(
   // Helper to emit privacy-safe room update to all players in a room
   const broadcastRoomUpdate = (roomId: string) => {
     const room = roomManager.getRoom(roomId);
-    if (!room) return;
+    if (!room) {
+      console.log(`[GAME] broadcastRoomUpdate failed: Room ${roomId} not found`);
+      return;
+    }
+
+    console.log(`[GAME] emitting room:updated for room ${roomId}, stage=${room.stage}, selectedGame=${room.selectedGame}`);
 
     // 1. Direct emission using registered player socket IDs
     for (const player of room.players) {
@@ -61,7 +66,7 @@ export function registerGameHandlers(
         }
       })
       .catch((err) => {
-        console.error('Error fetching sockets for broadcast update:', err);
+        console.error('[GAME] Error fetching sockets for broadcast update:', err);
       });
   };
 
@@ -85,10 +90,12 @@ export function registerGameHandlers(
       const cleanName = (nickname || 'Player 1').trim().slice(0, 15);
       const { roomId } = roomManager.createRoom(playerId, socket.id, cleanName);
 
+      console.log(`[GAME] room:create received: socket=${socket.id}, playerId=${playerId}, roomId=${roomId}`);
       socket.join(roomId);
       callback({ success: true, roomId });
       broadcastRoomUpdate(roomId);
     } catch (err: any) {
+      console.error('[GAME] room:create error:', err);
       callback({ success: false, error: err?.message || 'Failed to create room' });
     }
   });
@@ -100,6 +107,8 @@ export function registerGameHandlers(
       const cleanName = (nickname || 'Player 2').trim().slice(0, 15);
       const result = roomManager.joinRoom(playerId, socket.id, roomId, cleanName);
 
+      console.log(`[GAME] room:join received: socket=${socket.id}, playerId=${playerId}, roomId=${roomId}, success=${result.success}`);
+
       if (!result.success) {
         return callback({ success: false, error: result.error });
       }
@@ -109,6 +118,7 @@ export function registerGameHandlers(
       callback({ success: true });
       broadcastRoomUpdate(formattedRoomId);
     } catch (err: any) {
+      console.error('[GAME] room:join error:', err);
       callback({ success: false, error: err?.message || 'Failed to join room' });
     }
   });
@@ -118,6 +128,8 @@ export function registerGameHandlers(
     try {
       const playerId = getPlayerId();
       const result = roomManager.selectGame(playerId, game);
+      console.log(`[GAME] room:select_game received: socket=${socket.id}, playerId=${playerId}, game=${game}, success=${result.success}`);
+
       if (!result.success) {
         if (typeof callback === 'function') callback({ success: false, error: result.error });
         return;
@@ -129,7 +141,7 @@ export function registerGameHandlers(
       }
       if (typeof callback === 'function') callback({ success: true });
     } catch (err: any) {
-      console.error('Error selecting game:', err);
+      console.error('[GAME] Error selecting game:', err);
       if (typeof callback === 'function') callback({ success: false, error: err?.message || 'Failed to select game' });
     }
   });
@@ -138,7 +150,12 @@ export function registerGameHandlers(
   socket.on('room:start_game', (callback) => {
     try {
       const playerId = getPlayerId();
+      const existingRoom = roomManager.getRoomByPlayerId(playerId);
+      console.log(`[GAME] room:start_game received: socket=${socket.id}, playerId=${playerId}, roomId=${existingRoom?.roomId}, selectedGame=${existingRoom?.selectedGame}`);
+
       const result = roomManager.startGame(playerId);
+      console.log(`[GAME] roomManager.startGame result: success=${result.success}, error=${result.error}, newStage=${result.room?.stage}`);
+
       if (!result.success) {
         if (typeof callback === 'function') callback({ success: false, error: result.error });
         return;
@@ -149,7 +166,7 @@ export function registerGameHandlers(
       }
       if (typeof callback === 'function') callback({ success: true });
     } catch (err: any) {
-      console.error('Error starting game:', err);
+      console.error('[GAME] Error starting game:', err);
       if (typeof callback === 'function') callback({ success: false, error: err?.message || 'Failed to start game' });
     }
   });
@@ -204,25 +221,28 @@ export function registerGameHandlers(
 
     if (result.room) {
       broadcastRoomUpdate(result.room.roomId);
-
-      if (result.room.stage === 'TOSS') {
-        const tossRes = roomManager.executeToss(playerId, 'HEADS');
-        if (tossRes.room && tossRes.tossResult) {
-          io.to(result.room.roomId).emit('toss:result', tossRes.tossResult);
-          broadcastRoomUpdate(result.room.roomId);
-        }
-      }
     }
   });
 
   // 9. Choose Toss
-  socket.on('toss:choose', ({ choice }: { choice: CoinChoice }) => {
+  socket.on('toss:choose', ({ choice }: { choice: CoinChoice }, callback) => {
     const playerId = getPlayerId();
     const tossRes = roomManager.executeToss(playerId, choice);
     if (tossRes.room && tossRes.tossResult) {
-      io.to(tossRes.room.roomId).emit('toss:result', tossRes.tossResult);
-      broadcastRoomUpdate(tossRes.room.roomId);
+      const roomId = tossRes.room.roomId;
+      io.to(roomId).emit('toss:result', tossRes.tossResult);
+      broadcastRoomUpdate(roomId);
+      if (typeof callback === 'function') callback({ success: true });
+
+      // After 3.5 seconds (allowing coin animation & winner presentation), transition stage
+      setTimeout(() => {
+        const updatedRoom = roomManager.completeTossAndStartGame(roomId);
+        if (updatedRoom) {
+          broadcastRoomUpdate(roomId);
+        }
+      }, 3500);
     } else if (tossRes.error) {
+      if (typeof callback === 'function') callback({ success: false, error: tossRes.error });
       socket.emit('error:message', { message: tossRes.error });
     }
   });

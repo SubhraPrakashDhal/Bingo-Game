@@ -184,3 +184,149 @@
 .animate-pulse-glow {
   animation: pulseGlow 2.5s infinite ease-in-out;
 }
+
+/* Custom Modern Glassmorphic Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.6), rgba(147, 51, 234, 0.6));
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.9), rgba(147, 51, 234, 0.9));
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+}
+
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(147, 51, 234, 0.6) rgba(15, 23, 42, 0.5);
+}
+
+/* 3D Coin Toss Styles */
+.coin-perspective {
+  perspective: 900px;
+}
+
+.coin-3d-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.6), 0 12px 30px rgba(0, 0, 0, 0.7);
+}
+
+.coin-face-front {
+  transform: rotateY(0deg) translateZ(6px);
+}
+
+.coin-face-back {
+  transform: rotateY(180deg) translateZ(6px);
+}
+
+.coin-edge-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid #b45309;
+  background-color: rgba(146, 64, 14, 0.85);
+  pointer-events: none;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes coinFloat {
+  0%, 100% {
+    transform: translateY(0px) rotateX(14deg);
+  }
+  50% {
+    transform: translateY(-6px) rotateX(10deg);
+  }
+}
+
+.coin-idle-float {
+  animation: coinFloat 3s ease-in-out infinite;
+}
+
+/* Guaranteed 3D Multi-Turn Flip Keyframe Animations */
+@keyframes coinFlipHeads {
+  0% {
+    transform: rotateX(12deg) rotateY(0deg);
+  }
+  15% {
+    transform: rotateX(8deg) rotateY(540deg);
+  }
+  35% {
+    transform: rotateX(-6deg) rotateY(1080deg);
+  }
+  60% {
+    transform: rotateX(5deg) rotateY(1620deg);
+  }
+  82% {
+    transform: rotateX(-2deg) rotateY(1980deg);
+  }
+  100% {
+    transform: rotateX(0deg) rotateY(2160deg);
+  }
+}
+
+@keyframes coinFlipTails {
+  0% {
+    transform: rotateX(12deg) rotateY(0deg);
+  }
+  15% {
+    transform: rotateX(8deg) rotateY(540deg);
+  }
+  35% {
+    transform: rotateX(-6deg) rotateY(1080deg);
+  }
+  60% {
+    transform: rotateX(5deg) rotateY(1620deg);
+  }
+  82% {
+    transform: rotateX(-2deg) rotateY(2160deg);
+  }
+  100% {
+    transform: rotateX(0deg) rotateY(2340deg);
+  }
+}
+
+.coin-flip-heads {
+  animation: coinFlipHeads 2.4s cubic-bezier(0.12, 0.75, 0.25, 1) forwards;
+}
+
+.coin-flip-tails {
+  animation: coinFlipTails 2.4s cubic-bezier(0.12, 0.75, 0.25, 1) forwards;
+}
+
+
+
+

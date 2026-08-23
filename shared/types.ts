@@ -8,7 +8,24 @@ export type GameStage =
   | 'DOTS_PLAYING'
   | 'DOTS_ENDED';
 
-export type GameType = 'bingo' | 'dots';
+export type GameType =
+  | 'bingo'
+  | 'dots'
+  | 'chess'
+  | 'checkers'
+  | 'tictactoe'
+  | 'battleship'
+  | 'connect4'
+  | 'ludo'
+  | 'reversi'
+  | 'sudoku'
+  | 'dominoes'
+  | 'carrom'
+  | 'pool'
+  | 'uno'
+  | 'snakes'
+  | 'scrabble'
+  | 'backgammon';
 
 export type CoinChoice = 'HEADS' | 'TAILS';
 
@@ -72,6 +89,7 @@ export interface RoomState {
   boards: { [playerId: string]: number[] }; // 25 flat numbers stored server-side per stable playerId
   tossChoice?: CoinChoice;
   tossWinnerId?: string; // Stable playerId
+  tossChooserId?: string; // Stable playerId of player designated to choose
   currentTurnPlayerId?: string; // Stable playerId
   calledNumbers: number[];
   winnerId?: string; // Stable playerId
@@ -103,6 +121,7 @@ export interface ClientRoomState {
   mySocketId: string;
   tossChoice?: CoinChoice;
   tossWinnerId?: string;
+  tossChooserId?: string;
   currentTurnPlayerId?: string;
   calledNumbers: number[];
   latestCalledNumber?: number | null;
@@ -125,7 +144,7 @@ export interface ClientToServerEvents {
   'room:return_to_lobby': () => void;
   'room:toggle_ready': () => void;
   'board:submit': (payload: { board: number[] }, callback: (res: { success: boolean; error?: string }) => void) => void;
-  'toss:choose': (payload: { choice: CoinChoice }) => void;
+  'toss:choose': (payload: { choice: CoinChoice }, callback?: (res: { success: boolean; error?: string }) => void) => void;
   'game:call_number': (payload: { number: number }, callback: (res: { success: boolean; error?: string }) => void) => void;
   'game:rematch': () => void;
   'dots:move': (payload: { type: LineType; row: number; col: number }, callback?: (res: { success: boolean; error?: string }) => void) => void;

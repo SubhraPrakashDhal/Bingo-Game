@@ -19,7 +19,7 @@ export class DotsAndBoxesGame {
   private rematchRequestedBy: string | null = null;
   private messages: GameChatMessage[] = [];
 
-  constructor(roomId: string, playerIds: string[]) {
+  constructor(roomId: string, playerIds: string[], initialTurnPlayerId?: string) {
     this.roomId = roomId;
     this.horizontalLines = this.createHorizontalGrid();
     this.verticalLines = this.createVerticalGrid();
@@ -27,7 +27,11 @@ export class DotsAndBoxesGame {
     for (const pId of playerIds) {
       this.scores[pId] = 0;
     }
-    this.currentTurn = playerIds[0] || null;
+    this.currentTurn = initialTurnPlayerId || playerIds[0] || null;
+  }
+
+  public setInitialTurn(playerId: string): void {
+    this.currentTurn = playerId;
   }
 
   private createHorizontalGrid(): Line[][] {

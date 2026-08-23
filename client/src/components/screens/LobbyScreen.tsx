@@ -4,14 +4,16 @@ import { GlassButton } from '../ui/GlassButton';
 import { Badge } from '../ui/Badge';
 import { useBingoSocket } from '../../context/SocketContext';
 import { copyToClipboard } from '../../utils/clipboard';
-import { Copy, Check, Crown, LogOut, Sparkles, Play } from 'lucide-react';
+import { Copy, Check, Crown, LogOut, Sparkles, Play, Library } from 'lucide-react';
 import { GameType } from '../../../../shared/types';
-import { AVAILABLE_GAMES } from '../../games/registry/gameDefinitions';
+import { AVAILABLE_GAMES, getGameById } from '../../games/registry/gameDefinitions';
+import { GameLibraryModal } from '../modals/GameLibraryModal';
 
 export const LobbyScreen: React.FC = () => {
   const { roomState, selectGame, startGame, leaveRoom } = useBingoSocket();
   const [copied, setCopied] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
   if (!roomState) return null;
 
@@ -21,7 +23,17 @@ export const LobbyScreen: React.FC = () => {
   const opponent = roomState.players.find((p) => p.id !== me?.id);
   const isHost = me ? me.isHost : (roomState.players.length === 1 || roomState.players[0]?.id === roomState.myPlayerId);
 
-  const selectedGameDef = AVAILABLE_GAMES.find((g) => g.id === roomState.selectedGame);
+  const selectedGameDef = getGameById(roomState.selectedGame);
+
+  // Compute the 2 visible main cards:
+  // Card #1: Currently selected game (marked as Selected)
+  // Card #2: Alternative game (if Card #1 is 'dots', use 'bingo', else default to 'dots')
+  const currentSelectedId = roomState.selectedGame || 'bingo';
+  const primarySelectedGame = getGameById(currentSelectedId);
+  const alternativeGameId: GameType = currentSelectedId === 'dots' ? 'bingo' : 'dots';
+  const alternativeGame = getGameById(alternativeGameId);
+
+  const mainTwoCards = [primarySelectedGame, alternativeGame];
 
   const handleCopyCode = async () => {
     const success = await copyToClipboard(roomState.roomId);
@@ -33,14 +45,23 @@ export const LobbyScreen: React.FC = () => {
 
   const handleSelectGame = async (game: GameType) => {
     if (!isHost) return;
+    const gameDef = getGameById(game);
+    if (!gameDef.isImplemented) return;
     await selectGame(game);
   };
 
   const handleStartGame = async () => {
-    if (!isHost || roomState.players.length < 2 || !roomState.selectedGame) return;
+    console.log('[GAME] Start clicked. isHost:', isHost, 'players:', roomState.players.length, 'selectedGame:', roomState.selectedGame);
+    if (!isHost || roomState.players.length < 2 || !roomState.selectedGame) {
+      console.warn('[GAME] Start game validation failed on client. isHost:', isHost, 'players:', roomState.players.length, 'selectedGame:', roomState.selectedGame);
+      return;
+    }
     setIsStarting(true);
     try {
-      await startGame();
+      const res = await startGame();
+      console.log('[GAME] handleStartGame completed res:', res);
+    } catch (err) {
+      console.error('[GAME] handleStartGame error:', err);
     } finally {
       setIsStarting(false);
     }
@@ -139,7 +160,7 @@ export const LobbyScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Compact Game Selection Cards */}
+        {/* Main Game Selection Section: Exactly 2 visible cards + Choose Other Games action */}
         <div className="mb-6 text-left">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -154,10 +175,11 @@ export const LobbyScreen: React.FC = () => {
             )}
           </div>
 
+          {/* Exactly Two Visible Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {AVAILABLE_GAMES.map((gameDef) => {
+            {mainTwoCards.map((gameDef) => {
               const isSelected = roomState.selectedGame === gameDef.id;
-              const isBlue = gameDef.themeColor === 'blue';
+              const Icon = gameDef.icon;
 
               return (
                 <div
@@ -171,38 +193,47 @@ export const LobbyScreen: React.FC = () => {
                       handleSelectGame(gameDef.id);
                     }
                   }}
-                  className={`p-4 rounded-xl border text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 select-none ${
-                    isHost ? 'cursor-pointer hover:border-blue-400/80 active:scale-[0.98]' : 'cursor-default'
+                  className={`p-4 rounded-2xl border text-left transition-all duration-300 select-none relative group overflow-hidden ${
+                    isHost ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : 'cursor-default'
                   } ${
                     isSelected
-                      ? isBlue
-                        ? 'bg-gradient-to-br from-blue-900/40 to-slate-900 border-blue-500 shadow-lg shadow-blue-500/20 ring-1 ring-blue-500'
-                        : 'bg-gradient-to-br from-purple-900/40 to-slate-900 border-purple-500 shadow-lg shadow-purple-500/20 ring-1 ring-purple-500'
-                      : 'bg-slate-900/40 border-white/10 opacity-70 hover:opacity-100'
+                      ? `bg-gradient-to-br ${gameDef.bgGradient} ${gameDef.activeBorder} shadow-xl ring-1 ${gameDef.ringColor}`
+                      : `bg-slate-900/60 hover:bg-slate-800/80 ${gameDef.borderColor} opacity-85 hover:opacity-100 hover:shadow-lg`
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-2.5">
                     <div
-                      className={`w-9 h-9 rounded-lg border flex items-center justify-center font-bold text-base ${
-                        isBlue
-                          ? 'bg-blue-500/20 border-blue-500/30 text-blue-400'
-                          : 'bg-purple-500/20 border-purple-500/30 text-purple-400'
-                      }`}
+                      className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-base transition-transform group-hover:scale-110 ${gameDef.iconBg}`}
                     >
-                      {gameDef.icon}
+                      <Icon className={`w-5 h-5 ${gameDef.iconColor}`} />
                     </div>
                     {isSelected && (
-                      <Badge variant={isBlue ? 'blue' : 'purple'} className="text-[10px]">
-                        Selected
+                      <Badge variant={gameDef.badgeVariant} className="text-[10px] font-bold">
+                        ✓ Selected
                       </Badge>
                     )}
                   </div>
-                  <h3 className="font-bold text-white text-sm">{gameDef.name}</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">{gameDef.description}</p>
+                  <h3 className="font-extrabold text-white text-sm tracking-tight group-hover:text-blue-300 transition-colors">
+                    {gameDef.name}
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-0.5 line-clamp-1">{gameDef.description}</p>
                 </div>
               );
             })}
           </div>
+
+          {/* Choose Other Games Action */}
+          <button
+            type="button"
+            onClick={() => setIsLibraryOpen(true)}
+            className="w-full mt-3 p-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/80 border border-white/10 hover:border-blue-500/40 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-200 shadow-sm active:scale-[0.99] cursor-pointer group"
+          >
+            <Library className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+            <span>Choose Other Games</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold">
+              {AVAILABLE_GAMES.length} Available
+            </span>
+          </button>
         </div>
 
         {/* Action Controls */}
@@ -233,13 +264,22 @@ export const LobbyScreen: React.FC = () => {
               <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
               <span>
                 {roomState.selectedGame
-                  ? `Waiting for Host to start ${roomState.selectedGame === 'bingo' ? 'Bingo' : 'Dots & Boxes'}...`
+                  ? `Waiting for Host to start ${selectedGameDef?.name || roomState.selectedGame}...`
                   : 'Waiting for Host to select a game...'}
               </span>
             </div>
           )}
         </div>
       </GlassCard>
+
+      {/* Game Library Modal */}
+      <GameLibraryModal
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        selectedGameId={roomState.selectedGame}
+        onSelectGame={handleSelectGame}
+        isHost={isHost}
+      />
     </div>
   );
 };

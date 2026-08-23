@@ -83,6 +83,7 @@ interface SocketContextType {
   returnToLobby: () => void;
   toggleReady: () => void;
   submitBoard: (board: number[]) => Promise<{ success: boolean; error?: string }>;
+  chooseToss: (choice: CoinChoice) => Promise<{ success: boolean; error?: string }>;
   callNumber: (num: number) => Promise<{ success: boolean; error?: string }>;
   requestRematch: () => void;
   makeDotsMove: (type: LineType, row: number, col: number) => Promise<{ success: boolean; error?: string }>;
@@ -130,16 +131,27 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   useEffect(() => {
     const getServerUrl = (): string => {
-      if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
+      const envUrl =
+        import.meta.env.VITE_API_URL ||
+        import.meta.env.VITE_SOCKET_URL ||
+        import.meta.env.NEXT_PUBLIC_SOCKET_URL ||
+        import.meta.env.SOCKET_URL ||
+        import.meta.env.API_URL;
+
+      if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+        console.log('[GAME] Using environment Socket URL:', envUrl.trim());
+        return envUrl.trim();
       }
       if (typeof window !== 'undefined' && window.location?.origin) {
+        console.log('[GAME] Defaulting to origin Socket URL:', window.location.origin);
         return window.location.origin;
       }
       return 'http://localhost:3001';
     };
 
     const serverUrl = getServerUrl();
+    console.log(`[GAME] Initializing Socket.IO connection to ${serverUrl} with playerId=${playerId}`);
+
     const newSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io(serverUrl, {
       auth: { playerId },
       autoConnect: true,
@@ -151,7 +163,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
-      console.log(`Connected to GAMES PRIVATE server. Socket: ${newSocket.id}, PlayerId: ${playerId}`);
+      console.log(`[GAME] socket connected: ${newSocket.id}, playerId: ${playerId}`);
       setIsConnected(true);
       setIsReconnecting(false);
 
@@ -179,13 +191,13 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Disconnected from GAMES PRIVATE server');
+      console.log('[GAME] socket disconnected');
       setIsConnected(false);
       setIsReconnecting(true);
     });
 
     newSocket.on('room:updated', (state: ClientRoomState) => {
-      console.log('Room state updated:', state);
+      console.log('[GAME] room:updated received: roomId=', state.roomId, 'stage=', state.stage, 'selectedGame=', state.selectedGame);
       setRoomState(state);
       if (state.stage !== 'GAME_OVER') {
         setRematchNotification(null);
@@ -199,7 +211,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
 
     newSocket.on('game_selection_updated', ({ selectedGame }) => {
-      console.log('Game selection updated:', selectedGame);
+      console.log('[GAME] game_selection_updated received:', selectedGame);
       setRoomState((prevState) => {
         if (!prevState) return prevState;
         return {
@@ -249,7 +261,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const createRoom = (nickname: string) => {
     return new Promise<{ success: boolean; roomId?: string; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      console.log('[GAME] emitting room:create for nickname:', nickname);
       socket.emit('room:create', { nickname }, (res) => {
+        console.log('[GAME] room:create response:', res);
         if (res.success && res.roomId) {
           saveSessionRoom(res.roomId, nickname);
         }
@@ -261,7 +275,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const joinRoom = (roomId: string, nickname: string) => {
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      console.log('[GAME] emitting room:join for roomId:', roomId, 'nickname:', nickname);
       socket.emit('room:join', { roomId, nickname }, (res) => {
+        console.log('[GAME] room:join response:', res);
         if (res.success) {
           saveSessionRoom(roomId, nickname);
         }
@@ -271,18 +287,21 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const selectGame = (game: GameType) => {
+    console.log('[GAME] emitting room:select_game:', game);
     setRoomState((prev) => (prev ? { ...prev, selectedGame: game } : prev));
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
       
       const timer = setTimeout(() => {
-        resolve({ success: false, error: 'Select game timed out' });
+        console.warn('[GAME] room:select_game timed out');
+        resolve({ success: false, error: 'Select game request timed out' });
       }, 5000);
 
       socket.emit('room:select_game', { game }, (res) => {
         clearTimeout(timer);
+        console.log('[GAME] room:select_game response:', res);
         if (res && !res.success && res.error) {
-          console.error('Select game failed on server:', res.error);
+          console.error('[GAME] Select game failed on server:', res.error);
           setErrorMessage(res.error);
         }
         resolve(res || { success: true });
@@ -291,17 +310,22 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const startGame = () => {
+    console.log('[GAME] emitting room:start_game');
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
 
       const timer = setTimeout(() => {
-        resolve({ success: false, error: 'Start game request timed out. Please try again.' });
+        console.warn('[GAME] room:start_game timed out after 5s');
+        const timeoutErr = 'Start game request timed out. Please verify server connection and try again.';
+        setErrorMessage(timeoutErr);
+        resolve({ success: false, error: timeoutErr });
       }, 5000);
 
       socket.emit('room:start_game', (res) => {
         clearTimeout(timer);
+        console.log('[GAME] room:start_game response:', res);
         if (res && !res.success && res.error) {
-          console.error('Start game failed on server:', res.error);
+          console.error('[GAME] Start game failed on server:', res.error);
           setErrorMessage(res.error);
         }
         resolve(res || { success: true });
@@ -322,6 +346,18 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
       socket.emit('board:submit', { board }, (res) => {
         resolve(res);
+      });
+    });
+  };
+
+  const chooseToss = (choice: CoinChoice) => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('toss:choose', { choice }, (res) => {
+        if (res && !res.success && res.error) {
+          setErrorMessage(res.error);
+        }
+        resolve(res || { success: true });
       });
     });
   };
@@ -408,6 +444,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         returnToLobby,
         toggleReady,
         submitBoard,
+        chooseToss,
         callNumber,
         requestRematch,
         makeDotsMove,

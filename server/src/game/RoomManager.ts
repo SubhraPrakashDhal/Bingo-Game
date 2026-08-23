@@ -173,6 +173,10 @@ export class RoomManager {
       return { success: false, error: 'Game selection is locked during match.' };
     }
 
+    if (game !== 'bingo' && game !== 'dots') {
+      return { success: false, error: 'That game is coming soon! Only Bingo and Dots & Boxes are currently playable.' };
+    }
+
     room.selectedGame = game;
     return { success: true, room };
   }
@@ -205,6 +209,7 @@ export class RoomManager {
       room.calledNumbers = [];
       room.tossChoice = undefined;
       room.tossWinnerId = undefined;
+      room.tossChooserId = undefined;
       room.currentTurnPlayerId = undefined;
       room.winnerId = undefined;
       room.winningLines = {};
@@ -216,11 +221,17 @@ export class RoomManager {
         p.wantsRematch = false;
       }
     } else if (room.selectedGame === 'dots') {
-      room.stage = 'DOTS_PLAYING';
-      const playerIds = room.players.map((p) => p.playerId || p.id);
-      const engine = GameRegistry.create(room.selectedGame, room.roomId, playerIds);
-      this.activeGameEngines.set(room.roomId, engine);
+      room.stage = 'TOSS';
+      room.tossChoice = undefined;
+      room.tossWinnerId = undefined;
+      room.currentTurnPlayerId = undefined;
+      room.winnerId = undefined;
       room.chatMessages = [];
+      const guest = room.players.find((p) => !p.isHost);
+      const host = room.players.find((p) => p.isHost);
+      room.tossChooserId = guest ? (guest.playerId || guest.id) : (host ? (host.playerId || host.id) : undefined);
+    } else {
+      return { success: false, error: 'Selected game is coming soon! Please choose Bingo or Dots & Boxes.' };
     }
 
     return { success: true, room };
@@ -366,6 +377,11 @@ export class RoomManager {
 
     if (room.players.length === 2 && room.players.every((p) => p.isBoardReady)) {
       room.stage = 'TOSS';
+      const guest = room.players.find((p) => !p.isHost);
+      const host = room.players.find((p) => p.isHost);
+      room.tossChooserId = guest ? (guest.playerId || guest.id) : (host ? (host.playerId || host.id) : undefined);
+      room.tossChoice = undefined;
+      room.tossWinnerId = undefined;
     }
 
     return { success: true, room };
@@ -382,6 +398,10 @@ export class RoomManager {
       return { error: 'Coin toss is not currently active.' };
     }
 
+    if (room.tossChoice) {
+      return { error: 'Coin toss choice has already been submitted.' };
+    }
+
     const host = room.players.find((p) => p.isHost);
     const guest = room.players.find((p) => !p.isHost);
 
@@ -391,12 +411,24 @@ export class RoomManager {
 
     const hostId = host.playerId || host.id;
     const guestId = guest.playerId || guest.id;
+    const chooserId = room.tossChooserId || guestId;
+
+    // Validate that caller is the designated toss chooser (opponent/guest)
+    if (playerId !== chooserId && playerId !== guestId) {
+      return { error: 'Only the opponent can select Heads or Tails.' };
+    }
+
+    if (choice !== 'HEADS' && choice !== 'TAILS') {
+      return { error: 'Invalid toss choice.' };
+    }
+
+    const otherPlayerId = playerId === hostId ? guestId : hostId;
 
     room.tossChoice = choice;
-    const { outcome, winnerId } = TossEngine.determineWinner(choice, hostId, guestId);
+    const { outcome, winnerId } = TossEngine.determineWinner(choice, playerId, otherPlayerId);
     room.tossWinnerId = winnerId;
     room.currentTurnPlayerId = winnerId;
-    room.stage = 'PLAYING';
+    // Stage remains 'TOSS' so client can view coin animation & winner overlay
 
     const winnerPlayer = room.players.find(
       (p) => (p.playerId || p.id) === winnerId
@@ -411,6 +443,25 @@ export class RoomManager {
         winnerNickname: winnerPlayer?.nickname || 'Winner',
       },
     };
+  }
+
+  public completeTossAndStartGame(roomId: string): RoomState | undefined {
+    const room = this.rooms.get(roomId);
+    if (!room || room.stage !== 'TOSS') return undefined;
+
+    if (room.selectedGame === 'dots') {
+      room.stage = 'DOTS_PLAYING';
+      const playerIds = room.players.map((p) => p.playerId || p.id);
+      const engine = GameRegistry.create(room.selectedGame, room.roomId, playerIds);
+      if (engine instanceof DotsEngine && room.tossWinnerId) {
+        engine.getDotsGameInstance().setInitialTurn(room.tossWinnerId);
+      }
+      this.activeGameEngines.set(room.roomId, engine);
+    } else {
+      room.stage = 'PLAYING';
+    }
+
+    return room;
   }
 
   public callNumber(
@@ -564,7 +615,12 @@ export class RoomManager {
 
     const res = dotsGame.requestRematch(playerId);
     if (res.isRestarted) {
-      room.stage = 'DOTS_PLAYING';
+      room.stage = 'TOSS';
+      room.tossChoice = undefined;
+      room.tossWinnerId = undefined;
+      const guest = room.players.find((p) => !p.isHost);
+      const host = room.players.find((p) => p.isHost);
+      room.tossChooserId = guest ? (guest.playerId || guest.id) : (host ? (host.playerId || host.id) : undefined);
       room.chatMessages = [];
       dotsGame.clearMessages();
     }
@@ -697,9 +753,7 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
 
-    const targetPlayer = room.players.find(
-      (p) => (p.playerId || p.id) === targetPlayerId
-    );
+    const targetPlayer = this.findPlayerInRoom(room, targetPlayerId);
     const completedCounts = room.completedLineCounts || {};
     const lines = room.winningLines || {};
 
@@ -733,6 +787,7 @@ export class RoomManager {
       mySocketId: targetPlayer?.id || '',
       tossChoice: room.tossChoice,
       tossWinnerId: room.tossWinnerId,
+      tossChooserId: room.tossChooserId,
       currentTurnPlayerId: room.currentTurnPlayerId,
       calledNumbers: room.calledNumbers,
       latestCalledNumber: room.calledNumbers[room.calledNumbers.length - 1] || null,
