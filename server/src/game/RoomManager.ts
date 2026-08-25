@@ -5,14 +5,17 @@ import {
   CoinChoice,
   GameType,
   LineType,
+  TicTacToeMode,
   GameChatMessage,
 } from '../../../shared/types';
 import { BingoEvaluator } from './BingoEvaluator';
 import { TossEngine } from './TossEngine';
 import { DotsAndBoxesGame } from './DotsAndBoxesGame';
+import { TicTacToeGame } from './TicTacToeGame';
 import { IGameEngine } from '../games/core/IGameEngine';
 import { GameRegistry } from '../games/core/GameRegistry';
 import { DotsEngine } from '../games/dots/DotsEngine';
+import { TicTacToeEngine } from '../games/tictactoe/TicTacToeEngine';
 
 export class RoomManager {
   private rooms: Map<string, RoomState> = new Map();
@@ -26,6 +29,14 @@ export class RoomManager {
     const engine = this.activeGameEngines.get(roomId);
     if (engine && engine instanceof DotsEngine) {
       return engine.getDotsGameInstance();
+    }
+    return undefined;
+  }
+
+  private getTicTacToeGameInstance(roomId: string): TicTacToeGame | undefined {
+    const engine = this.activeGameEngines.get(roomId);
+    if (engine && engine instanceof TicTacToeEngine) {
+      return engine.getTicTacToeGameInstance();
     }
     return undefined;
   }
@@ -173,8 +184,8 @@ export class RoomManager {
       return { success: false, error: 'Game selection is locked during match.' };
     }
 
-    if (game !== 'bingo' && game !== 'dots') {
-      return { success: false, error: 'That game is coming soon! Only Bingo and Dots & Boxes are currently playable.' };
+    if (game !== 'bingo' && game !== 'dots' && game !== 'tictactoe') {
+      return { success: false, error: 'That game is coming soon! Please choose Bingo, Dots & Boxes, or Tic-Tac-Toe.' };
     }
 
     room.selectedGame = game;
@@ -220,6 +231,17 @@ export class RoomManager {
         p.isReady = true;
         p.wantsRematch = false;
       }
+    } else if (room.selectedGame === 'tictactoe') {
+      room.stage = 'TICTACTOE_MODE_SELECT';
+      room.tossChoice = undefined;
+      room.tossWinnerId = undefined;
+      room.tossChooserId = undefined;
+      room.currentTurnPlayerId = undefined;
+      room.winnerId = undefined;
+      room.chatMessages = [];
+      if (!room.tictactoeMode) {
+        room.tictactoeMode = 'classic';
+      }
     } else if (room.selectedGame === 'dots') {
       room.stage = 'TOSS';
       room.tossChoice = undefined;
@@ -231,8 +253,36 @@ export class RoomManager {
       const host = room.players.find((p) => p.isHost);
       room.tossChooserId = guest ? (guest.playerId || guest.id) : (host ? (host.playerId || host.id) : undefined);
     } else {
-      return { success: false, error: 'Selected game is coming soon! Please choose Bingo or Dots & Boxes.' };
+      return { success: false, error: 'Selected game is coming soon! Please choose Bingo, Dots & Boxes, or Tic-Tac-Toe.' };
     }
+
+    return { success: true, room };
+  }
+
+  /**
+   * Selects Tic-Tac-Toe mode (Host only) and advances to TOSS.
+   */
+  public selectTicTacToeMode(
+    playerId: string,
+    mode: TicTacToeMode
+  ): { success: boolean; room?: RoomState; error?: string } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const player = this.findPlayerInRoom(room, playerId);
+    if (!player || !player.isHost) {
+      return { success: false, error: 'Only the host can select the game mode.' };
+    }
+
+    if (mode !== 'classic' && mode !== 'infinite') {
+      return { success: false, error: 'Invalid Tic-Tac-Toe mode.' };
+    }
+
+    room.tictactoeMode = mode;
+    room.stage = 'TOSS';
+    const guest = room.players.find((p) => !p.isHost);
+    const host = room.players.find((p) => p.isHost);
+    room.tossChooserId = guest ? (guest.playerId || guest.id) : (host ? (host.playerId || host.id) : undefined);
 
     return { success: true, room };
   }
@@ -457,6 +507,18 @@ export class RoomManager {
         engine.getDotsGameInstance().setInitialTurn(room.tossWinnerId);
       }
       this.activeGameEngines.set(room.roomId, engine);
+    } else if (room.selectedGame === 'tictactoe') {
+      room.stage = 'TICTACTOE_PLAYING';
+      const playerIds = room.players.map((p) => p.playerId || p.id);
+      const engine = GameRegistry.create(room.selectedGame, room.roomId, playerIds);
+      if (engine instanceof TicTacToeEngine) {
+        const mode = room.tictactoeMode || 'classic';
+        engine.getTicTacToeGameInstance().setMode(mode);
+        if (room.tossWinnerId) {
+          engine.getTicTacToeGameInstance().setInitialTurnAndSymbols(room.tossWinnerId);
+        }
+      }
+      this.activeGameEngines.set(room.roomId, engine);
     } else {
       room.stage = 'PLAYING';
     }
@@ -631,6 +693,55 @@ export class RoomManager {
   }
 
   /**
+   * Tic-Tac-Toe Move execution.
+   */
+  public makeTicTacToeMove(
+    playerId: string,
+    cellIndex: number
+  ): { success: boolean; room?: RoomState; error?: string } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const ticTacToeGame = this.getTicTacToeGameInstance(room.roomId);
+    if (!ticTacToeGame) return { success: false, error: 'Tic-Tac-Toe match not active' };
+
+    const res = ticTacToeGame.makeMove(playerId, cellIndex);
+    if (!res.success) return { success: false, error: res.message };
+
+    const state = ticTacToeGame.getTicTacToeState();
+    if (state.winnerId !== null) {
+      room.stage = 'TICTACTOE_ENDED';
+    }
+
+    return { success: true, room };
+  }
+
+  /**
+   * Tic-Tac-Toe Rematch request.
+   */
+  public requestTicTacToeRematch(playerId: string): { success: boolean; room?: RoomState; isRestarted: boolean } {
+    const room = this.getRoomByPlayerId(playerId);
+    if (!room) return { success: false, isRestarted: false };
+
+    const ticTacToeGame = this.getTicTacToeGameInstance(room.roomId);
+    if (!ticTacToeGame) return { success: false, isRestarted: false };
+
+    const res = ticTacToeGame.requestRematch(playerId);
+    if (res.isRestarted) {
+      room.stage = 'TOSS';
+      room.tossChoice = undefined;
+      room.tossWinnerId = undefined;
+      const guest = room.players.find((p) => !p.isHost);
+      const host = room.players.find((p) => p.isHost);
+      room.tossChooserId = guest ? (guest.playerId || guest.id) : (host ? (host.playerId || host.id) : undefined);
+      room.chatMessages = [];
+      ticTacToeGame.clearMessages();
+    }
+
+    return { success: true, room, isRestarted: res.isRestarted };
+  }
+
+  /**
    * Process in-game chat message for both games.
    */
   public addChatMessage(
@@ -665,6 +776,10 @@ export class RoomManager {
     const dotsGame = this.getDotsGameInstance(room.roomId);
     if (dotsGame) {
       dotsGame.addMessage(playerId, sender.nickname, cleanText);
+    }
+    const ticTacToeGame = this.getTicTacToeGameInstance(room.roomId);
+    if (ticTacToeGame) {
+      ticTacToeGame.addMessage(playerId, sender.nickname, cleanText);
     }
 
     return { success: true, message: chatMsg, room };
@@ -784,11 +899,13 @@ export class RoomManager {
     const opponentCompletedLines = completedCounts[opponentPlayerId] || 0;
 
     const dotsGame = this.getDotsGameInstance(roomId);
+    const ticTacToeGame = this.getTicTacToeGameInstance(roomId);
 
     return {
       roomId: room.roomId,
       stage: room.stage,
       selectedGame: room.selectedGame,
+      tictactoeMode: room.tictactoeMode,
       players: publicPlayers,
       myBoard,
       myPlayerId: targetPlayerId,
@@ -804,6 +921,7 @@ export class RoomManager {
       opponentCompletedLines,
       myWinningLineIndices,
       dotsState: dotsGame ? dotsGame.getDotsState() : undefined,
+      ticTacToeState: ticTacToeGame ? ticTacToeGame.getTicTacToeState() : undefined,
       chatMessages: room.chatMessages || [],
     };
   }

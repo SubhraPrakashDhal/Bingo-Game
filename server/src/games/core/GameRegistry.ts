@@ -2,6 +2,7 @@ import { GameType } from '../../../../shared/types';
 import { IGameEngine } from './IGameEngine';
 import { BingoEngine } from '../bingo/BingoEngine';
 import { DotsEngine } from '../dots/DotsEngine';
+import { TicTacToeEngine } from '../tictactoe/TicTacToeEngine';
 
 export type GameEngineConstructor = new (roomId: string, playerIds: string[]) => IGameEngine;
 
@@ -30,3 +31,5 @@ export class GameRegistry {
 // Auto-register built-in games
 GameRegistry.register('bingo', BingoEngine);
 GameRegistry.register('dots', DotsEngine);
+GameRegistry.register('tictactoe', TicTacToeEngine);
+

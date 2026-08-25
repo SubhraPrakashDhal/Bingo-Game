@@ -335,6 +335,46 @@ export function registerGameHandlers(
     }
   });
 
+  // 14. Tic-Tac-Toe Mode Selection
+  socket.on('tictactoe:select_mode', ({ mode }, callback) => {
+    const playerId = getPlayerId();
+    const result = roomManager.selectTicTacToeMode(playerId, mode);
+    if (!result.success) {
+      if (typeof callback === 'function') callback({ success: false, error: result.error });
+      return;
+    }
+
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 15. Tic-Tac-Toe Cell Move
+  socket.on('tictactoe:move', ({ cellIndex }, callback) => {
+    const playerId = getPlayerId();
+    const result = roomManager.makeTicTacToeMove(playerId, cellIndex);
+    if (!result.success) {
+      if (typeof callback === 'function') callback({ success: false, error: result.error });
+      return;
+    }
+
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 15. Tic-Tac-Toe Rematch
+  socket.on('tictactoe:rematch', () => {
+    const playerId = getPlayerId();
+    const result = roomManager.requestTicTacToeRematch(playerId);
+
+    if (result.room) {
+      broadcastRoomUpdate(result.room.roomId);
+    }
+  });
+
   // 14. Shared In-Game Chat Message
   const handleChat = (rawMessage?: string, rawText?: string, callback?: (res: { success: boolean; error?: string }) => void) => {
     const playerId = getPlayerId();

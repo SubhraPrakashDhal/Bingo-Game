@@ -226,6 +226,8 @@ export const TossScreen: React.FC = () => {
             <p className="text-xs text-slate-300 font-medium">
               {isDots ? (
                 isWinner ? 'You get the first line move!' : `${winnerNickname || 'Opponent'} moves first!`
+              ) : roomState.selectedGame === 'tictactoe' ? (
+                isWinner ? 'You get symbol X and the first move!' : `${winnerNickname || 'Opponent'} gets symbol X and moves first!`
               ) : (
                 isWinner ? 'You will call the first number!' : `${winnerNickname || 'Opponent'} will call the first number!`
               )}

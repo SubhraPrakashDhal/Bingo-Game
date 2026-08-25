@@ -292,7 +292,7 @@ export const AVAILABLE_GAMES: GameDefinition[] = [
     iconBg: 'bg-cyan-500/20 border-cyan-500/40',
     iconColor: 'text-cyan-400',
     badgeVariant: 'blue',
-    isImplemented: false,
+    isImplemented: true,
   },
   {
     id: 'uno',

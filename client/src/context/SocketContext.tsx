@@ -7,6 +7,7 @@ import {
   CoinChoice,
   GameType,
   LineType,
+  TicTacToeMode,
 } from '../../../shared/types';
 
 interface BingoSession {
@@ -88,6 +89,9 @@ interface SocketContextType {
   requestRematch: () => void;
   makeDotsMove: (type: LineType, row: number, col: number) => Promise<{ success: boolean; error?: string }>;
   requestDotsRematch: () => void;
+  makeTicTacToeMove: (cellIndex: number) => Promise<{ success: boolean; error?: string }>;
+  requestTicTacToeRematch: () => void;
+  selectTicTacToeMode: (mode: TicTacToeMode) => Promise<{ success: boolean; error?: string }>;
   sendChatMessage: (message: string) => Promise<{ success: boolean; error?: string }>;
   leaveRoom: () => void;
   endSession: () => void;
@@ -389,6 +393,31 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (socket) socket.emit('dots:rematch');
   };
 
+  const makeTicTacToeMove = (cellIndex: number) => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('tictactoe:move', { cellIndex }, (res) => {
+        resolve(res || { success: true });
+      });
+    });
+  };
+
+  const requestTicTacToeRematch = () => {
+    if (socket) socket.emit('tictactoe:rematch');
+  };
+
+  const selectTicTacToeMode = (mode: TicTacToeMode) => {
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, error: 'Socket not connected' });
+      socket.emit('tictactoe:select_mode', { mode }, (res) => {
+        if (res && !res.success && res.error) {
+          setErrorMessage(res.error);
+        }
+        resolve(res || { success: true });
+      });
+    });
+  };
+
   const sendChatMessage = (message: string) => {
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       if (!socket) return resolve({ success: false, error: 'Socket not connected' });
@@ -449,6 +478,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         requestRematch,
         makeDotsMove,
         requestDotsRematch,
+        makeTicTacToeMove,
+        requestTicTacToeRematch,
+        selectTicTacToeMode,
         sendChatMessage,
         leaveRoom,
         endSession,
