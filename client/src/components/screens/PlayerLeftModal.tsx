@@ -11,7 +11,7 @@ export const PlayerLeftModal: React.FC = () => {
 
   // Determine if opponent has left during active game or room session
   const opponent = roomState.players.find((p) => p.id !== roomState.myPlayerId);
-  const isGameActive = ['BOARD_SETUP', 'TOSS', 'PLAYING', 'GAME_OVER', 'DOTS_PLAYING', 'DOTS_ENDED'].includes(roomState.stage);
+  const isGameActive = ['BOARD_SETUP', 'TOSS', 'PLAYING', 'GAME_OVER', 'DOTS_PLAYING', 'DOTS_ENDED', 'TICTACTOE_MODE_SELECT', 'TICTACTOE_PLAYING', 'TICTACTOE_ENDED'].includes(roomState.stage);
   const isOpponentMissing = isGameActive && (!opponent || roomState.players.length < 2);
 
   const shouldShow = playerLeftNotification !== null || isOpponentMissing;

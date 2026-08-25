@@ -6,7 +6,10 @@ export type GameStage =
   | 'PLAYING'
   | 'GAME_OVER'
   | 'DOTS_PLAYING'
-  | 'DOTS_ENDED';
+  | 'DOTS_ENDED'
+  | 'TICTACTOE_MODE_SELECT'
+  | 'TICTACTOE_PLAYING'
+  | 'TICTACTOE_ENDED';
 
 export type GameType =
   | 'bingo'
@@ -71,6 +74,30 @@ export interface DotsGameState {
   rematchRequestedBy?: string | null;
 }
 
+// Tic-Tac-Toe structures
+export type TicTacToeSymbol = 'X' | 'O';
+export type TicTacToeMode = 'classic' | 'infinite';
+
+export interface TicTacToeMark {
+  playerId: string;
+  symbol: TicTacToeSymbol;
+  cellIndex: number;
+  moveNumber: number;
+}
+
+export interface TicTacToeGameState {
+  mode: TicTacToeMode;
+  board: (TicTacToeSymbol | null)[];
+  currentTurn: string | null;
+  playerSymbols: Record<string, TicTacToeSymbol>;
+  winnerId: string | 'draw' | null;
+  winningLine: number[] | null;
+  marks: TicTacToeMark[];
+  lastExpiredMark?: TicTacToeMark | null;
+  forfeitReason?: 'opponent_left' | null;
+  rematchRequestedBy?: string | null;
+}
+
 export interface GameChatMessage {
   id: string;
   roomId: string;
@@ -85,6 +112,7 @@ export interface RoomState {
   roomId: string; // 6-character room code
   stage: GameStage;
   selectedGame: GameType | null;
+  tictactoeMode?: TicTacToeMode;
   players: Player[];
   boards: { [playerId: string]: number[] }; // 25 flat numbers stored server-side per stable playerId
   tossChoice?: CoinChoice;
@@ -96,6 +124,7 @@ export interface RoomState {
   winningLines: { [playerId: string]: number[][] }; // Array of line indices per stable playerId
   completedLineCounts: { [playerId: string]: number };
   dotsState?: DotsGameState;
+  ticTacToeState?: TicTacToeGameState;
   chatMessages?: GameChatMessage[];
 }
 
@@ -115,6 +144,7 @@ export interface ClientRoomState {
   roomId: string;
   stage: GameStage;
   selectedGame: GameType | null;
+  tictactoeMode?: TicTacToeMode;
   players: PublicPlayerInfo[];
   myBoard: number[] | null; // Only sent to the owner!
   myPlayerId: string;
@@ -131,6 +161,7 @@ export interface ClientRoomState {
   opponentCompletedLines: number;
   myWinningLineIndices: number[][]; // Grid cell indices for line highlights
   dotsState?: DotsGameState;
+  ticTacToeState?: TicTacToeGameState;
   chatMessages?: GameChatMessage[];
 }
 
@@ -149,6 +180,9 @@ export interface ClientToServerEvents {
   'game:rematch': () => void;
   'dots:move': (payload: { type: LineType; row: number; col: number }, callback?: (res: { success: boolean; error?: string }) => void) => void;
   'dots:rematch': () => void;
+  'tictactoe:select_mode': (payload: { mode: TicTacToeMode }, callback?: (res: { success: boolean; error?: string }) => void) => void;
+  'tictactoe:move': (payload: { cellIndex: number }, callback?: (res: { success: boolean; error?: string }) => void) => void;
+  'tictactoe:rematch': () => void;
   'send_game_chat_message': (payload: { roomId?: string; message?: string; text?: string }, callback?: (res: { success: boolean; error?: string }) => void) => void;
   'send_message': (payload: { roomId: string; text: string }) => void;
   'room:leave': () => void;
@@ -182,4 +216,3 @@ export interface ServerToClientEvents {
   'voice:candidate': (payload: { senderSocketId: string; candidate: RTCIceCandidateInit }) => void;
   'voice:leave': (payload: { senderSocketId: string }) => void;
 }
-

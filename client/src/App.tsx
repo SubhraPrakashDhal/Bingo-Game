@@ -4,6 +4,7 @@ import { WelcomeScreen } from './components/screens/WelcomeScreen';
 import { LobbyScreen } from './components/screens/LobbyScreen';
 import { SetupBoardScreen } from './components/screens/SetupBoardScreen';
 import { TossScreen } from './components/screens/TossScreen';
+import { TicTacToeModeSelect } from './components/tictactoe/TicTacToeModeSelect';
 import { ActiveGameRenderer } from './games/GameRegistry';
 import { GameChat } from './components/shared/GameChat';
 import { VoiceChat } from './components/shared/VoiceChat';
@@ -36,6 +37,8 @@ const MainContent: React.FC = () => {
         return <WelcomeScreen />;
       case 'LOBBY':
         return <LobbyScreen />;
+      case 'TICTACTOE_MODE_SELECT':
+        return <TicTacToeModeSelect />;
       case 'BOARD_SETUP':
         return <SetupBoardScreen />;
       case 'TOSS':
@@ -44,6 +47,8 @@ const MainContent: React.FC = () => {
       case 'GAME_OVER':
       case 'DOTS_PLAYING':
       case 'DOTS_ENDED':
+      case 'TICTACTOE_PLAYING':
+      case 'TICTACTOE_ENDED':
         return roomState.selectedGame ? (
           <ActiveGameRenderer gameType={roomState.selectedGame} />
         ) : (

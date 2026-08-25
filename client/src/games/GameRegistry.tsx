@@ -2,6 +2,7 @@ import React from 'react';
 import { GameType } from '../../../shared/types';
 import { GameScreen } from '../components/screens/GameScreen';
 import { DotsGameScreen } from '../components/dots/DotsGameScreen';
+import { TicTacToeGameScreen } from '../components/tictactoe/TicTacToeGameScreen';
 import { getGameById } from './registry/gameDefinitions';
 import { useBingoSocket } from '../context/SocketContext';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -11,6 +12,7 @@ import { Sparkles, ArrowLeft } from 'lucide-react';
 const GAME_COMPONENTS: Partial<Record<GameType, React.ComponentType>> = {
   bingo: GameScreen,
   dots: DotsGameScreen,
+  tictactoe: TicTacToeGameScreen,
 };
 
 export const ActiveGameRenderer: React.FC<{ gameType: GameType }> = ({ gameType }) => {
@@ -32,7 +34,7 @@ export const ActiveGameRenderer: React.FC<{ gameType: GameType }> = ({ gameType 
           </div>
           <h2 className="text-2xl font-extrabold text-white mb-2">{gameDef.name}</h2>
           <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-            {gameDef.description}. This game module is currently being finalized. Please select Bingo or Dots & Boxes to play a full match right now!
+            {gameDef.description}. This game module is currently being finalized. Please select Bingo, Dots & Boxes, or Tic-Tac-Toe to play a full match right now!
           </p>
           <GlassButton type="button" onClick={returnToLobby} className="w-full flex items-center justify-center gap-2">
             <ArrowLeft className="w-4 h-4" />
