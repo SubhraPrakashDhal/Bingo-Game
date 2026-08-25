@@ -77,10 +77,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                 sm:p-2.5
                 transition-all
                 duration-300
-                ${
-                  p1Active
-                    ? 'border-cyan-400/40 bg-cyan-400/[0.09] shadow-[0_0_25px_rgba(34,211,238,0.15)]'
-                    : 'border-white/[0.06] bg-white/[0.025]'
+                ${p1Active
+                  ? 'border-cyan-400/40 bg-cyan-400/[0.09] shadow-[0_0_25px_rgba(34,211,238,0.15)]'
+                  : 'border-white/[0.06] bg-white/[0.025]'
                 }
               `}
             >
@@ -105,10 +104,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                     transition-all
                     sm:h-10
                     sm:w-10
-                    ${
-                      p1Active
-                        ? 'border-cyan-400/50 bg-cyan-500/20 text-cyan-300 shadow-md shadow-cyan-500/20'
-                        : 'border-white/[0.08] bg-white/[0.04] text-slate-400'
+                    ${p1Active
+                      ? 'border-cyan-400/50 bg-cyan-500/20 text-cyan-300 shadow-md shadow-cyan-500/20'
+                      : 'border-white/[0.08] bg-white/[0.04] text-slate-400'
                     }
                   `}
                 >
@@ -207,10 +205,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                     uppercase
                     tracking-wide
                     sm:text-[8px]
-                    ${
-                      mode === 'infinite'
-                        ? 'border-purple-400/30 bg-purple-500/20 text-purple-300'
-                        : 'border-cyan-400/30 bg-cyan-500/20 text-cyan-300'
+                    ${mode === 'infinite'
+                      ? 'border-purple-400/30 bg-purple-500/20 text-purple-300'
+                      : 'border-cyan-400/30 bg-cyan-500/20 text-cyan-300'
                     }
                   `}
                 >
@@ -233,10 +230,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                 sm:p-2.5
                 transition-all
                 duration-300
-                ${
-                  p2Active
-                    ? 'border-purple-400/40 bg-purple-400/[0.09] shadow-[0_0_25px_rgba(192,132,252,0.15)]'
-                    : 'border-white/[0.06] bg-white/[0.025]'
+                ${p2Active
+                  ? 'border-purple-400/40 bg-purple-400/[0.09] shadow-[0_0_25px_rgba(192,132,252,0.15)]'
+                  : 'border-white/[0.06] bg-white/[0.025]'
                 }
               `}
             >
@@ -310,10 +306,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                     transition-all
                     sm:h-10
                     sm:w-10
-                    ${
-                      p2Active
-                        ? 'border-purple-400/50 bg-purple-500/20 text-purple-300 shadow-md shadow-purple-500/20'
-                        : 'border-white/[0.08] bg-white/[0.04] text-slate-400'
+                    ${p2Active
+                      ? 'border-purple-400/50 bg-purple-500/20 text-purple-300 shadow-md shadow-purple-500/20'
+                      : 'border-white/[0.08] bg-white/[0.04] text-slate-400'
                     }
                   `}
                 >
@@ -338,10 +333,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
             transition-all
             duration-300
             sm:py-2.5
-            ${
-              isMyTurn
-                ? 'border-emerald-400/10 bg-emerald-400/[0.055]'
-                : 'border-white/[0.06] bg-black/[0.1]'
+            ${isMyTurn
+              ? 'border-emerald-400/10 bg-emerald-400/[0.055]'
+              : 'border-white/[0.06] bg-black/[0.1]'
             }
           `}
         >
@@ -355,10 +349,9 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                 items-center
                 justify-center
                 rounded-full
-                ${
-                  isMyTurn
-                    ? 'bg-emerald-400/15'
-                    : 'bg-white/[0.05]'
+                ${isMyTurn
+                  ? 'bg-emerald-400/15'
+                  : 'bg-white/[0.05]'
                 }
               `}
             >
@@ -378,18 +371,17 @@ export const TicTacToeHeader: React.FC<TicTacToeHeaderProps> = ({
                 font-black
                 uppercase
                 tracking-[0.18em]
-                ${
-                  isMyTurn
-                    ? 'text-emerald-300'
-                    : 'text-slate-400'
+                ${isMyTurn
+                  ? 'text-emerald-300'
+                  : 'text-slate-400'
                 }
               `}
             >
               {isMyTurn
                 ? 'Your Turn'
                 : activePlayer
-                ? `${activePlayer.nickname}'s Turn`
-                : 'Game Ended'}
+                  ? `${activePlayer.nickname}'s Turn`
+                  : 'Game Ended'}
             </span>
           </div>
         </div>
