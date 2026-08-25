@@ -140,102 +140,102 @@ const MainContent: React.FC = () => {
       <main className="flex-1 flex flex-col">{renderCurrentScreen()}</main>
 
       {/* Footer */}
-<footer className="relative w-full border-t border-white/[0.06] bg-slate-950/80 px-4 py-6 backdrop-blur-md">
-  {/* Top glow */}
-  <div className="pointer-events-none absolute inset-x-0 -top-px mx-auto h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
+      <footer className="relative w-full border-t border-white/[0.06] bg-slate-950/80 px-4 py-6 backdrop-blur-md">
+        {/* Top glow */}
+        <div className="pointer-events-none absolute inset-x-0 -top-px mx-auto h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
 
-  <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 sm:flex-row">
-    {/* Left - Platform Info */}
-    <div className="flex flex-col items-center gap-1.5 sm:items-start">
-      <div className="flex items-center gap-2">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 sm:flex-row">
+          {/* Left - Platform Info */}
+          <div className="flex flex-col items-center gap-1.5 sm:items-start">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
 
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          GAMES PRIVATE
-        </span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                GAMES PRIVATE
+              </span>
 
-        <span className="text-slate-700">•</span>
+              <span className="text-slate-700">•</span>
 
-        <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">
-          Real-Time 2-Player Platform
-        </span>
-      </div>
+              <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                Real-Time 2-Player Platform
+              </span>
+            </div>
 
-      <span className="text-[10px] text-slate-600">
-        Powered by Socket.IO • Real-Time Sync
-      </span>
-    </div>
+            <span className="text-[10px] text-slate-600">
+              Powered by Socket.IO • Real-Time Sync
+            </span>
+          </div>
 
-    {/* Social Links */}
-    <div className="flex items-center gap-2">
-      {/* GitHub */}
-      <a
-        href="https://github.com/SubhraPrakashDhal"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="GitHub"
-        className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.08] hover:text-white"
-      >
-        <Github className="h-4 w-4 transition-transform group-hover:scale-110" />
-      </a>
+          {/* Social Links */}
+          <div className="flex items-center gap-2">
+            {/* GitHub */}
+            <a
+              href="https://github.com/SubhraPrakashDhal"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub"
+              className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.08] hover:text-white"
+            >
+              <Github className="h-4 w-4 transition-transform group-hover:scale-110" />
+            </a>
 
-      {/* Instagram */}
-      <a
-        href="https://instagram.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Instagram"
-        className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-pink-500/30 hover:bg-pink-500/10 hover:text-pink-400"
-      >
-        <Instagram className="h-4 w-4 transition-transform group-hover:scale-110" />
-      </a>
+            {/* Instagram */}
+            <a
+              href="https://www.instagram.com/__subhra_prakash__/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+              className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-pink-500/30 hover:bg-pink-500/10 hover:text-pink-400"
+            >
+              <Instagram className="h-4 w-4 transition-transform group-hover:scale-110" />
+            </a>
 
-      {/* LinkedIn */}
-      <a
-        href="https://linkedin.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="LinkedIn"
-        className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400"
-      >
-        <Linkedin className="h-4 w-4 transition-transform group-hover:scale-110" />
-      </a>
+            {/* LinkedIn */}
+            <a
+              href="https://www.linkedin.com/in/subhra-prakash-dhal"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+              className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400"
+            >
+              <Linkedin className="h-4 w-4 transition-transform group-hover:scale-110" />
+            </a>
 
-      {/* X */}
-      <a
-        href="https://x.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="X"
-        className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-      >
-        <span className="text-sm font-semibold transition-transform group-hover:scale-110">
-          𝕏
-        </span>
-      </a>
-    </div>
-  </div>
+            {/* X */}
+            <a
+              href="https://x.com/Subhra_Dhal"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="X"
+              className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+            >
+              <span className="text-sm font-semibold transition-transform group-hover:scale-110">
+                𝕏
+              </span>
+            </a>
+          </div>
+        </div>
 
-  {/* Bottom */}
-  <div className="mx-auto mt-5 flex max-w-7xl flex-col items-center justify-center gap-1 border-t border-white/[0.04] pt-4 text-center">
-    <p className="text-[10px] text-slate-600">
-      Designed & Developed by
-    </p>
+        {/* Bottom */}
+        <div className="mx-auto mt-5 flex max-w-7xl flex-col items-center justify-center gap-1 border-t border-white/[0.04] pt-4 text-center">
+          <p className="text-[10px] text-slate-600">
+            Designed & Developed by
+          </p>
 
-    <a
-      href="https://github.com/SubhraPrakashDhal"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-[11px] font-semibold tracking-wide text-slate-400 transition-colors hover:text-blue-400"
-    >
-      SUBHRA PRAKASH DHAL
-    </a>
+          <a
+            href="https://subhra-prakash-portfolio.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-semibold tracking-wide text-slate-400 transition-colors hover:text-blue-400"
+          >
+            SUBHRA PRAKASH DHAL
+          </a>
 
-    <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-slate-700">
-      © {new Date().getFullYear()} Games Private
-    </p>
-  </div>
-</footer>
+          <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-slate-700">
+            © {new Date().getFullYear()} Games Private
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };

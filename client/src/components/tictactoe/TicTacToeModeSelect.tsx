@@ -63,13 +63,11 @@ export const TicTacToeModeSelect: React.FC = () => {
                 setSelectedMode('classic');
               }
             }}
-            className={`p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${
-              isHost ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : 'cursor-default'
-            } ${
-              selectedMode === 'classic'
+            className={`p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${isHost ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : 'cursor-default'
+              } ${selectedMode === 'classic'
                 ? 'bg-gradient-to-br from-cyan-950/70 via-slate-900 to-slate-950 border-cyan-400 shadow-xl shadow-cyan-500/20 ring-1 ring-cyan-400/50'
                 : 'bg-slate-900/60 hover:bg-slate-800/80 border-white/10 opacity-80 hover:opacity-100'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-3">
               <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
@@ -110,13 +108,11 @@ export const TicTacToeModeSelect: React.FC = () => {
                 setSelectedMode('infinite');
               }
             }}
-            className={`p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${
-              isHost ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : 'cursor-default'
-            } ${
-              selectedMode === 'infinite'
+            className={`p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${isHost ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : 'cursor-default'
+              } ${selectedMode === 'infinite'
                 ? 'bg-gradient-to-br from-purple-950/70 via-slate-900 to-slate-950 border-purple-400 shadow-xl shadow-purple-500/20 ring-1 ring-purple-400/50'
                 : 'bg-slate-900/60 hover:bg-slate-800/80 border-white/10 opacity-80 hover:opacity-100'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-3">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
